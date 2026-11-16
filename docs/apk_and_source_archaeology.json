@@ -1,0 +1,17 @@
+{
+  "authorized_repo_analysis": {
+    "status": "NO_AUTHORIZED_REPO_PROVIDED",
+    "confidence": "UNKNOWN"
+  },
+  "legal_apk_analysis": {
+    "status": "NO_LEGAL_APK_PROVIDED",
+    "confidence": "UNKNOWN",
+    "rea_standby_status": {
+      "tool": "morluto/rea (rea-agents)",
+      "configured_mode": "STANDBY",
+      "use_rea_requested": false,
+      "binary_installed": false,
+      "execution_status": "STANDBY_DORMANT (USE_REA=false)"
+    }
+  }
+}

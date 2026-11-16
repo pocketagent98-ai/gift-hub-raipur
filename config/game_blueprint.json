@@ -1,0 +1,100 @@
+{
+  "schema_version": "5.2.0",
+  "generated_at_utc": "2026-11-16T04:53:43Z",
+  "source": {
+    "order_file": "ORDER.md",
+    "order_sha256": "4cfa3443f41ba20abe9333937b91a62ac583fc2156555aa39dbbbf1ece7bc82c"
+  },
+  "game_id": "block_juggle_cleanroom_01",
+  "engine": {
+    "family": "block_puzzle",
+    "requested_genre": "block_puzzle",
+    "board_size": 8,
+    "tray_pieces": 3,
+    "categories": [
+      "level_by_level",
+      "endless_map_chunks"
+    ],
+    "active_category": "level_by_level"
+  },
+  "theme": {
+    "name": "crystal",
+    "palette": {
+      "background": "#0F172A",
+      "surface": "#1E293B",
+      "primary": "#38BDF8",
+      "accent": "#00E676",
+      "reward": "#FBBF24",
+      "danger": "#F43F5E"
+    },
+    "piece_names": [
+      "Crystal Cube",
+      "Frost Block",
+      "Prism Tile",
+      "Shard Crystal"
+    ]
+  },
+  "difficulty": {
+    "mercy_rescue_threshold": 2,
+    "fever_combo_threshold": 3,
+    "starting_hints": 1,
+    "preset": "standard"
+  },
+  "levels": {
+    "total": 30,
+    "milestones": [
+      1,
+      3,
+      6,
+      8,
+      10,
+      16,
+      30
+    ],
+    "endless_chunks": 5,
+    "armored_hit_points": 4
+  },
+  "economy": {
+    "currency": "crystals",
+    "skus": [
+      {
+        "sku": "starter_gem_pouch",
+        "price_inr": 89,
+        "contents": "120 crystals"
+      },
+      {
+        "sku": "handful_of_gems",
+        "price_inr": 169,
+        "contents": "260 crystals"
+      },
+      {
+        "sku": "gem_jar",
+        "price_inr": 299,
+        "contents": "500 crystals + 1 hammer"
+      },
+      {
+        "sku": "gem_chest",
+        "price_inr": 499,
+        "contents": "900 crystals + 3 hammers"
+      },
+      {
+        "sku": "mega_crystal_bundle",
+        "price_inr": 699,
+        "contents": "1500 crystals + 5 juggles"
+      },
+      {
+        "sku": "vault_of_plenty",
+        "price_inr": 849,
+        "contents": "2500 crystals + all boosters"
+      }
+    ]
+  },
+  "ad_policy": {
+    "mid_move_interstitials": 0,
+    "interstitial_min_level": 3,
+    "interstitial_cooldown_seconds": 180,
+    "rewarded_optional_only": true
+  },
+  "idea_prompt": "Build a 100% original, commercial-grade Clean-Room 3D/2.5D Crystal Grid Cascade Puzzle game in Godot 4.7.2 inspired by https://play.google.com/store/apps/details?id=com.block.juggle (`com.block.juggle`). Include an 8x8 interactive board, 3-piece spawn tray, Juggle/Hold swap slot, row/column/3x3 clear combos, 4-hit armored crystal blocks, 30 progressive levels (verifying Levels 1, 8, 16, 30 in QA), 5 endless mode stages, 12 unified mobile UI screens with >=56px touch targets, 4-bus procedural audio, and callback-verified AdMob + Play Billing IAP catalog.",
+  "reference_link": "https://play.google.com/store/apps/details?id=com.block.juggle"
+}

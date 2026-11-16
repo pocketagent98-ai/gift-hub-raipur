@@ -1,0 +1,133 @@
+{
+  "schema_version": "5.0.0",
+  "supported_pipelines": [
+    "PATH_1_LICENSED_ADAPTATION (CC0, Public Domain, MIT, Apache-2.0, CC-BY-4.0 with full provenance)",
+    "PATH_2_ORIGINAL_CREATION (Godot 4.7.2 Procedural 3D Factory, SVG Vector Synthesis, 44.1kHz PCM Audio Synthesis)",
+    "PATH_3_HYBRID_ASSET_PIPELINE (Combines verified Path 1 licensed assets + Path 2 original creations)"
+  ],
+  "anti_piracy_and_anti_evasion_policy": {
+    "hash_or_fingerprint_manipulation_allowed": false,
+    "metadata_stripping_allowed": false,
+    "unauthorized_asset_relabeling_allowed": false,
+    "unauthorized_assets_detected": 0,
+    "verdict": "PASS_100_PERCENT_CLEAN_PROVENANCE"
+  },
+  "path_1_licensed_adaptations": [
+    {
+      "asset_path": "icon.svg",
+      "pipeline_path": "PATH_1_LICENSED_ADAPTATION",
+      "source": "Studio Clean-Room Vector Template (Godot 4.7 Standard SVG Specification)",
+      "license": "CC0-1.0",
+      "attribution": "AI Game Studio V5.0 Clean-Room Vector Icon (No third-party trademark)",
+      "modification_record": "Adapted color palette (#0F172A / #38BDF8) from the ORDER.md idea blueprint for mobile launcher readability",
+      "sha256": "ccb682a80e89f9479702d0e2038e571defa050e36c16c3421689a212190b0223",
+      "evasion_or_hash_tampering_detected": false
+    }
+  ],
+  "path_2_original_3d_generators": [
+    {
+      "asset_id": "PlayerCharacter3D",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "generator_script": "scripts/procedural_3d_factory.gd::create_humanoid_character",
+      "license": "ORIGINAL-STUDIO-OWNED",
+      "sha256": "ed0a30ff327b75287a5902f77ab30da90e9fdfe398ad9ff84437cd245a0cdc0b"
+    },
+    {
+      "asset_id": "OriginalArcadeVehicle3D",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "generator_script": "scripts/procedural_3d_factory.gd::create_arcade_vehicle",
+      "license": "ORIGINAL-STUDIO-OWNED",
+      "sha256": "ed0a30ff327b75287a5902f77ab30da90e9fdfe398ad9ff84437cd245a0cdc0b"
+    },
+    {
+      "asset_id": "TargetBubble_Armored_4Hit",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "generator_script": "scripts/game_manager.gd::_spawn_destructible_target",
+      "license": "ORIGINAL-STUDIO-OWNED",
+      "sha256": "47d924e7aaf4b8870d0cf4f674c5b042fc3a15547f62a2b510193f72e1d04505"
+    },
+    {
+      "asset_id": "OriginalHazardBomb3D & OriginalCollectibleCoin3D",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "generator_script": "scripts/procedural_3d_factory.gd::create_hazard_bomb / create_collectible_coin",
+      "license": "ORIGINAL-STUDIO-OWNED",
+      "sha256": "ed0a30ff327b75287a5902f77ab30da90e9fdfe398ad9ff84437cd245a0cdc0b"
+    }
+  ],
+  "path_2_original_2d_icons": [
+    {
+      "asset_path": "assets/icons/btn_play.svg",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "image/svg+xml",
+      "dimensions": "128x128",
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "de9f23fdccd2d4f50cf5b03794a2be9f1fc2e12eb29d6b5f0806d78104c68b99"
+    },
+    {
+      "asset_path": "assets/icons/coin_badge.svg",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "image/svg+xml",
+      "dimensions": "128x128",
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "49d786f46801cdff9205782abfb6dde7fafc6a1e5b278a80f3343678aea3bab8"
+    },
+    {
+      "asset_path": "assets/icons/shield_armor.svg",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "image/svg+xml",
+      "dimensions": "128x128",
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "b9c4cfd3c6ac64b5018b2920ed9f2c10fe2d2758218d813387637eebeddcb286"
+    },
+    {
+      "asset_path": "assets/icons/bomb_hazard.svg",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "image/svg+xml",
+      "dimensions": "128x128",
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "2d5022bdc010262ba502d7ace7c60ad754bacaa5b6dbe82b5638586d3c523702"
+    }
+  ],
+  "path_2_original_audio_wavs": [
+    {
+      "asset_path": "assets/audio/ui_click.wav",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "audio/wav (44.1kHz 16-bit PCM)",
+      "duration_sec": 0.12,
+      "rms_amplitude": 0.1933,
+      "non_silent_verified": true,
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "b595aae8bc3e8bf7ff0eda316f580b59216d01423bf90d7931c4d716d45e69db"
+    },
+    {
+      "asset_path": "assets/audio/bubble_pop.wav",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "audio/wav (44.1kHz 16-bit PCM)",
+      "duration_sec": 0.18,
+      "rms_amplitude": 0.1933,
+      "non_silent_verified": true,
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "71aecaa5986e6e7bb90456d8bc3e2d99bde45235c9be3458156b96012498a166"
+    },
+    {
+      "asset_path": "assets/audio/armor_crack.wav",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "audio/wav (44.1kHz 16-bit PCM)",
+      "duration_sec": 0.22,
+      "rms_amplitude": 0.1933,
+      "non_silent_verified": true,
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "d1fd0b465484f248ec6669efab10a47e0ca5b5761b640f1c6af38f53d5f7b8c1"
+    },
+    {
+      "asset_path": "assets/audio/victory_chime.wav",
+      "pipeline_path": "PATH_2_ORIGINAL_CREATION",
+      "type": "audio/wav (44.1kHz 16-bit PCM)",
+      "duration_sec": 0.45,
+      "rms_amplitude": 0.1933,
+      "non_silent_verified": true,
+      "license": "ORIGINAL-STUDIO-OWNED (CC0/MIT Compatible)",
+      "sha256": "c9865e67742aea84c024c40bc51df5176879fc7e072ba42cde7b762399a86325"
+    }
+  ]
+}

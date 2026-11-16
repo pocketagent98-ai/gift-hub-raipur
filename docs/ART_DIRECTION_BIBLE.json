@@ -1,0 +1,38 @@
+{
+  "genre": "bubble_shooter",
+  "visual_identity": "Luminous Neo-Arcade 3D (High-Contrast Mobile-First Readability)",
+  "palette": {
+    "primary_bg": "#0F172A",
+    "panel": "#1E293B",
+    "accent_cyan": "#38BDF8",
+    "accent_magenta": "#F472B6",
+    "reward_gold": "#FBBF24",
+    "text": "#F8FAFC"
+  },
+  "genre_systems": {
+    "bubble_shooter": [
+      "glossy_clearcoat_bubbles",
+      "4_hit_crack_progression",
+      "aim_trajectory_guide",
+      "chain_combo_particles"
+    ],
+    "racing_3d": [
+      "metallic_clearcoat_chassis",
+      "nitro_particle_trail",
+      "speed_fov_camera",
+      "suspension_ground_align"
+    ],
+    "action_3d": [
+      "hit_stop_camera_pulse",
+      "emissive_weapon_trails",
+      "landing_dust_particles",
+      "target_lock_indicator"
+    ],
+    "default_3d": [
+      "unified_12_screen_theme",
+      "tween_button_bounce",
+      "directional_shadows",
+      "4_bus_audio_limiter"
+    ]
+  }
+}

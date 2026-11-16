@@ -1,0 +1,48 @@
+name: "🔄 Future-Proof Android SDK & Godot Compatibility Monitor (PR Gate)"
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      propose_target_sdk:
+        description: 'Optional candidate Android Target SDK to test and propose via PR (e.g., 36 or 37)'
+        required: false
+        default: '0'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  android_compatibility_pr_gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "1. Checkout Studio Repository (Pinned SHA)"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: "2. Check Official Google Play Target SDK Policy & Run Backward-Compatibility Suite"
+        run: |
+          CANDIDATE_SDK="${{ github.event.inputs.propose_target_sdk || '0' }}"
+          python3 scripts/future_android_compatibility_updater.py --check-remote --propose-target-sdk "$CANDIDATE_SDK"
+          python3 test/run_v2_verification_suite.py
+
+      - name: "3. Open Pull Request for User Approval (Never Auto-Merge to Production)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "$(git status --porcelain config/android_compatibility_policy.json export_presets.cfg docs/ANDROID_COMPATIBILITY_UPDATE_PROPOSAL.md)" ]; then
+            BRANCH="auto-compat/android-sdk-$(date +%Y%m%d)"
+            git config user.name "AI-Game-Studio-Compat-Bot"
+            git config user.email "compat-bot@users.noreply.github.com"
+            git checkout -b "$BRANCH"
+            git add config/android_compatibility_policy.json export_presets.cfg docs/ANDROID_COMPATIBILITY_UPDATE_PROPOSAL.md
+            git commit -m "chore(android-compat): propose verified Target SDK update (Awaiting User Approval)"
+            git push -u origin "$BRANCH"
+            gh pr create \
+              --title "🔄 [Compatibility Gate] Verified Android Target SDK Update (Requires User Approval)" \
+              --body-file docs/ANDROID_COMPATIBILITY_UPDATE_PROPOSAL.md \
+              --base main --head "$BRANCH" || true
+          else
+            echo "No Target SDK changes required or candidate was reverted."
+          fi

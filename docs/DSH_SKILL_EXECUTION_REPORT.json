@@ -1,0 +1,51 @@
+{
+  "harness": "deepseek-harness",
+  "free_model_plugin": "@ebony-vinyl/dsh-our-free-model@2.8.3",
+  "opencode_removed": true,
+  "privacy_guard_block_shared_free_lane_for_private_research": true,
+  "dsh_cli_status": "BINARY_NOT_INSTALLED_IN_OFFLINE_SANDBOX",
+  "live_api_keys_present_in_env": false,
+  "live_nvidia_coding_proof": {
+    "status": "SKIPPED_NO_NVIDIA_KEY",
+    "model_used": null
+  },
+  "execution_environment": "OFFLINE_SANDBOX_DETERMINISTIC_BUILD",
+  "rea_standby_status": "STANDBY_DORMANT (USE_REA=false)",
+  "loaded_skills": {
+    "awesome-gamedev-agent-skills": {
+      "path": ".agents/skills/awesome-gamedev-agent-skills/SKILL.md",
+      "bytes": 535,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "godogen": {
+      "path": ".agents/skills/godogen/SKILL.md",
+      "bytes": 439,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "replica-recon": {
+      "path": ".agents/skills/replica-recon/SKILL.md",
+      "bytes": 398,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "replica-entrepreneur": {
+      "path": ".agents/skills/replica-entrepreneur/SKILL.md",
+      "bytes": 310,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "replica-brand": {
+      "path": ".agents/skills/replica-brand/SKILL.md",
+      "bytes": 295,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "craft-anything": {
+      "path": ".agents/skills/craft-anything/SKILL.md",
+      "bytes": 322,
+      "status": "LOADED_AND_ACTIVE"
+    },
+    "security-audit": {
+      "path": ".agents/skills/security-audit/SKILL.md",
+      "bytes": 322,
+      "status": "LOADED_AND_ACTIVE"
+    }
+  }
+}

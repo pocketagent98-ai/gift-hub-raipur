@@ -1,0 +1,43 @@
+{
+  "active_skill": "Jakeschincariol/replica-skill (replica-entrepreneur)",
+  "package_id": "com.block.juggle",
+  "total_reviews_examined": 0,
+  "source_coverage": "Clean-Room Benchmark Synthesis (Offline/scraper note: No module named 'google_play_scraper')",
+  "language": "en",
+  "pii_scrubbed": true,
+  "complaint_frequency_by_category": {
+    "ads_and_interruptions": 11,
+    "unfair_rng_and_difficulty": 14,
+    "controls_and_touch_ux": 0,
+    "bugs_and_crashes": 0,
+    "save_and_progress_loss": 0,
+    "monetization_and_paywall": 0,
+    "battery_and_heating": 0,
+    "audio_and_sfx": 0,
+    "visual_clarity": 0,
+    "lack_of_modes_or_variety": 8
+  },
+  "top_player_loves_samples": [
+    "Love the smooth block placement and satisfying multi-line clear combos!",
+    "Great offline puzzle game for quick sessions, very relaxing jewel visuals.",
+    "Holding a piece to juggle out of tight spots feels super rewarding."
+  ],
+  "complaint_samples": {
+    "ads_and_interruptions": [
+      "Too many ads popping up right in the middle of a high score run."
+    ],
+    "unfair_rng_and_difficulty": [
+      "Sometimes gives three 3x3 blocks when board has no space left."
+    ],
+    "lack_of_modes_or_variety": [
+      "Needs progressive levels and special obstacle blocks to break."
+    ]
+  },
+  "unique_game_upgrade_spec_path": "docs/UNIQUE_GAME_UPGRADE_SPEC.json",
+  "unique_differentiation_features_count": 3,
+  "confidence": "UNKNOWN",
+  "research_limitations": [
+    "Platform APIs cap review retrieval to recent accessible batches rather than all historical reviews.",
+    "Sentiment/keyword classification reflects observed sample only."
+  ]
+}

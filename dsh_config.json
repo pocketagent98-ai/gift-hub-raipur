@@ -1,0 +1,104 @@
+{
+  "harness": "deepseek-harness",
+  "mode": "primary_and_only_coding_agent",
+  "opencode_enabled": false,
+  "plugins": [
+    {
+      "name": "@ebony-vinyl/dsh-our-free-model",
+      "version": "2.8.3",
+      "profile": "web",
+      "install_cmd": "dsh plugin --profile web add @ebony-vinyl/dsh-our-free-model@2.8.3",
+      "models": [
+        "deepseek-v4.1-flash",
+        "kimi-k3"
+      ],
+      "privacy_tier": "non_sensitive_only",
+      "note": "Shared public gateway; never send private keys, user research, or security findings here."
+    }
+  ],
+  "external_subagents_optional": {
+    "claude_code": {
+      "enabled_if_env_present": "ANTHROPIC_API_KEY"
+    },
+    "codex": {
+      "enabled_if_env_present": "OPENAI_API_KEY"
+    }
+  },
+  "skill_packs": [
+    {
+      "name": "awesome-gamedev-agent-skills",
+      "repo": "https://github.com/gamedev-skills/awesome-gamedev-agent-skills",
+      "mandatory": true,
+      "godot_version": "4.7",
+      "skills_dir": ".agents/skills/awesome-gamedev-agent-skills"
+    }
+  ],
+  "routing_policy": {
+    "generic_godot_scaffolding_and_shaders": {
+      "primary": "dsh-our-free-model (DeepSeek V4.1 Flash / Kimi K3)",
+      "fallback": "litellm:studio-coder (NVIDIA NIM + Gemma 4)"
+    },
+    "private_user_research_and_security_audits": {
+      "primary": "litellm:studio-architect (NVIDIA Nemotron-3-Ultra-550B + Gemma 4)",
+      "fallback": "litellm:studio-coder",
+      "block_shared_free_lane": true
+    }
+  },
+  "studio_version": "5.0.0",
+  "decision_model": {
+    "model": "gemini-decision-1",
+    "endpoint": "Gemini Decisions API",
+    "limits": {
+      "rpm": 200,
+      "tpm": 20000,
+      "rpd": 10000
+    },
+    "roles": [
+      "skill_and_privacy_routing",
+      "polish_rubric_scoring",
+      "playstore_policy_yes_no_gate"
+    ],
+    "cannot_do": "Does NOT generate text, code, or UI images (zero output tokens)."
+  },
+  "high_thinking_flagship": {
+    "model": "nvidia_nim/moonshotai/kimi-k3.1-pro",
+    "context_window": 1048576,
+    "roles": [
+      "game_bible_gdd",
+      "art_direction_bible",
+      "core_3d_architecture",
+      "complex_shader_healing"
+    ],
+    "anti_overload_strategy": "3 retries with exponential jittered backoff (2s->5s->10s), then instant cascade to nemotron-3-ultra-550b-a55b -> gemma-4-27b-it."
+  },
+  "tool_registry_status": {
+    "deepseek-harness (dsh)": "PERMANENT",
+    "@ebony-vinyl/dsh-our-free-model@2.8.3": "PERMANENT_OPTIONAL_PLUGIN",
+    "gamedev-skills/awesome-gamedev-agent-skills": "PERMANENT",
+    "htdt/godogen": "PERMANENT",
+    "Jakeschincariol/replica-skill": "TEMPORARY",
+    "morluto/rea (rea-agents)": "STANDBY",
+    "storytold/craft-anything": "TEMPORARY",
+    "cloudflare/security-audit-skill": "PERMANENT",
+    "modern-web-guidance": "PERMANENT",
+    "godot-4.7.2-stable": "PERMANENT",
+    "gemini-decision-1": "PERMANENT",
+    "nvidia_nim/moonshotai/kimi-k3.1-pro": "PERMANENT"
+  },
+  "skill_directories": [
+    ".agents/skills/awesome-gamedev-agent-skills",
+    ".agents/skills/godogen",
+    ".agents/skills/replica-recon",
+    ".agents/skills/replica-entrepreneur",
+    ".agents/skills/replica-brand",
+    ".agents/skills/security-audit",
+    ".agents/rules"
+  ],
+  "qa_video_suites": [
+    "ui_shop",
+    "mechanics_lab",
+    "multi_levels",
+    "endless_chunks",
+    "save_ads_and_edge"
+  ]
+}

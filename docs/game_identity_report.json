@@ -1,0 +1,31 @@
+{
+  "timestamp_utc": "2026-11-16T05:58:51.466492+00:00",
+  "status": "BLOCKED_OFFLINE_OR_UNREACHABLE",
+  "package_id": "com.block.juggle",
+  "confidence": "UNKNOWN",
+  "active_skills": [
+    "Jakeschincariol/replica-skill (replica-recon, replica-brand)",
+    "storytold/craft-anything"
+  ],
+  "identity": {
+    "package_id": {
+      "value": "com.block.juggle",
+      "confidence": "VERIFIED"
+    },
+    "title": {
+      "value": "Unavailable offline (Requires online runner)",
+      "confidence": "UNKNOWN"
+    },
+    "publisher": {
+      "value": "Unavailable offline (Requires online runner)",
+      "confidence": "UNKNOWN"
+    }
+  },
+  "forbidden_trademarks": [
+    "com.block.juggle"
+  ],
+  "limitations": [
+    "Live Play Store network lookup blocked/unreachable in current environment: No module named 'google_play_scraper'"
+  ],
+  "source_url": "https://play.google.com/store/apps/details?id=com.block.juggle"
+}

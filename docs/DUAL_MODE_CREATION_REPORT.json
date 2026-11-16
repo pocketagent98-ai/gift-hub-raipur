@@ -1,0 +1,17 @@
+{
+  "status": "READY",
+  "game_id": "block_juggle_cleanroom_01",
+  "action_mode": "new_game",
+  "creation_origin": "PATH_A_REFERENCE_LINK_OR_APK",
+  "genre": "block_puzzle",
+  "origin_summary": "Reference-Driven Clean-Room Mode active (ref_link='https://play.google.com/store/apps/details?id=com.block.juggle', apk_path='none'). Extracting reference mechanics, UI button map, Ad schedule, IAP pricing, and Positive+Negative review upgrades.",
+  "user_prompt_excerpt": "Build a 100% original, commercial-grade Clean-Room 3D/2.5D Crystal Grid Cascade Puzzle game in Godot 4.7.2 inspired by https://play.google.com/store/apps/details?id=com.block.juggle (`com.block.juggle`). Include an 8x8 interactive board, 3-piece spawn tray, Juggle/Hold swap slot, row/column/3x3 clear combos, 4-hit armored crystal blocks, 30 progressive levels (verifying Levels 1, 8, 16, 30 in QA), 5 endless mode stages, 12 unified mobile UI screens with >=56px touch targets, 4-bus procedural aud",
+  "extra_studio_features_enabled": {
+    "adaptive_difficulty_director": "Monitors player failure/move count and adjusts piece/target spawn weights dynamically",
+    "smart_mercy_and_juggle_vault": "Prevents unfair RNG lockouts by guaranteeing a rescue piece when board space < 2",
+    "crystal_fever_overdrive": "3x+ combo streak activates 2x score multiplier and cracks armored obstacles",
+    "streak_booster_forge": "Awards free Hammer & Juggle boosters every 5 levels for 100% F2P fairness",
+    "cloud_apk_url_bypass": "Supports REFERENCE_APK_URL in ORDER.md to fetch >25MB APKs directly in GitHub Actions",
+    "one_command_update_mode": "Supports MODE: update_existing_game with automatic keystore reuse and version_code increment"
+  }
+}

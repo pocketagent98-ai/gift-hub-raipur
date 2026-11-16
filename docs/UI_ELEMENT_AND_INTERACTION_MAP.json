@@ -1,0 +1,1388 @@
+{
+  "schema_version": "5.0.0-dynamic",
+  "mapper_mode": "DYNAMIC_AST_TSCN_IMAGE_AND_APK_PARSER",
+  "active_research_skills": [
+    "Jakeschincariol/replica-skill (replica-recon, replica-entrepreneur, replica-brand) [TEMPORARY]",
+    "storytold/craft-anything (craft-anything-cli study) [TEMPORARY]",
+    "morluto/rea (rea-agents) [STANDBY]"
+  ],
+  "tscn_scene_nodes_verified": [
+    {
+      "scene_file": "main.tscn",
+      "node_name": "Main",
+      "node_type": "Node3D",
+      "parent": "root",
+      "properties": {},
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "WorldEnvironment",
+      "node_type": "WorldEnvironment",
+      "parent": ".",
+      "properties": {
+        "environment": "SubResource(\"Environment_main\")"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "DirectionalLight3D",
+      "node_type": "DirectionalLight3D",
+      "parent": ".",
+      "properties": {
+        "transform": "Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 15, 0)",
+        "shadow_enabled": "true"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "Ground",
+      "node_type": "StaticBody3D",
+      "parent": ".",
+      "properties": {
+        "transform": "Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "CollisionShape3D",
+      "node_type": "CollisionShape3D",
+      "parent": "Ground",
+      "properties": {
+        "shape": "SubResource(\"BoxShape3D_ground\")"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "MeshInstance3D",
+      "node_type": "MeshInstance3D",
+      "parent": "Ground",
+      "properties": {
+        "mesh": "SubResource(\"BoxMesh_ground\")"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "WorldRoot",
+      "node_type": "Node3D",
+      "parent": ".",
+      "properties": {},
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "Camera3D",
+      "node_type": "Camera3D",
+      "parent": ".",
+      "properties": {
+        "transform": "Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 3.5, 6.0)",
+        "current": "true"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "StudioUI",
+      "node_type": "CanvasLayer",
+      "parent": ".",
+      "properties": {
+        "script": "ExtResource(\"1_ui\")"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "main.tscn",
+      "node_name": "AssetFactory",
+      "node_type": "Node",
+      "parent": ".",
+      "properties": {
+        "script": "ExtResource(\"2_factory\")"
+      },
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "scene_file": "qa_bootstrap.tscn",
+      "node_name": "QABootstrap",
+      "node_type": "Node",
+      "parent": "root",
+      "properties": {
+        "script": "ExtResource(\"1_qaboot\")"
+      },
+      "evidence_tag": "VERIFIED"
+    }
+  ],
+  "safe_area_margins_px": {
+    "margin_left": 36,
+    "margin_right": 36,
+    "margin_top": 48,
+    "margin_bottom": 48
+  },
+  "min_button_touch_size_px": {
+    "width_px": 180,
+    "height_px": 56
+  },
+  "extracted_theme_colors_hex": [
+    "#0F1729",
+    "#142E5C",
+    "#1C3D7A",
+    "#2957A3",
+    "#407AC7",
+    "#61B8FF",
+    "#F2F2FF",
+    "#F7FCFF"
+  ],
+  "screens": [
+    {
+      "screen_id": "MainMenu",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 8,
+      "elements": [
+        {
+          "element_id": "MainMenu_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — MAINMENU",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_GameplayHUD",
+          "type": "Button",
+          "label": "Open GameplayHUD",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('GameplayHUD')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_LevelSelection",
+          "type": "Button",
+          "label": "Open LevelSelection",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('LevelSelection')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_Shop",
+          "type": "Button",
+          "label": "Open Shop",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Shop')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_Inventory",
+          "type": "Button",
+          "label": "Open Inventory",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Inventory')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_DailyRewards",
+          "type": "Button",
+          "label": "Open DailyRewards",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('DailyRewards')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_Profile",
+          "type": "Button",
+          "label": "Open Profile",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Profile')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_MainMenu_to_Settings",
+          "type": "Button",
+          "label": "Open Settings",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Settings')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "LoadingScreen",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 2,
+      "elements": [
+        {
+          "element_id": "LoadingScreen_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — LOADINGSCREEN",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_LoadingScreen_to_GameplayHUD",
+          "type": "Button",
+          "label": "Open GameplayHUD",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('GameplayHUD')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "GameplayHUD",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 5,
+      "elements": [
+        {
+          "element_id": "GameplayHUD_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — GAMEPLAYHUD",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "hud_score_lbl",
+          "type": "Label",
+          "label": "SCORE: 0 | COMBO: x1 | LEVEL: 1",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "tutorial_banner",
+          "type": "PanelContainer + Label",
+          "label": "TUTORIAL: Tap targets to fire! Purple Armored Bubbles take 4 hits to pop!",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_GameplayHUD_to_PauseMenu",
+          "type": "Button",
+          "label": "Open PauseMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('PauseMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_GameplayHUD_to_WinLoseScreen",
+          "type": "Button",
+          "label": "Open WinLoseScreen",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('WinLoseScreen')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "PauseMenu",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 4,
+      "elements": [
+        {
+          "element_id": "PauseMenu_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — PAUSEMENU",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_PauseMenu_to_GameplayHUD",
+          "type": "Button",
+          "label": "Open GameplayHUD",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('GameplayHUD')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_PauseMenu_to_Settings",
+          "type": "Button",
+          "label": "Open Settings",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Settings')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_PauseMenu_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "Settings",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 3,
+      "elements": [
+        {
+          "element_id": "Settings_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — SETTINGS",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_ToggleAudio",
+          "type": "Button",
+          "label": "Toggle Master Audio",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "interaction": "AudioServer.set_bus_mute(Master, not is_bus_mute)",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Settings_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "Shop",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 4,
+      "elements": [
+        {
+          "element_id": "Shop_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — SHOP",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Shop_to_Inventory",
+          "type": "Button",
+          "label": "Open Inventory",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Inventory')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Shop_to_Rewards",
+          "type": "Button",
+          "label": "Open Rewards",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "SaveManager.add_coins(-25) -> show_screen('Rewards')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Shop_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "Inventory",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 3,
+      "elements": [
+        {
+          "element_id": "Inventory_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — INVENTORY",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Inventory_to_Shop",
+          "type": "Button",
+          "label": "Open Shop",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Shop')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Inventory_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "Rewards",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 2,
+      "elements": [
+        {
+          "element_id": "Rewards_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — REWARDS",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Rewards_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "LevelSelection",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 3,
+      "elements": [
+        {
+          "element_id": "LevelSelection_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — LEVELSELECTION",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_LevelSelection_to_GameplayHUD",
+          "type": "Button",
+          "label": "Open GameplayHUD",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('GameplayHUD')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_LevelSelection_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "WinLoseScreen",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 4,
+      "elements": [
+        {
+          "element_id": "WinLoseScreen_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — WINLOSESCREEN",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_WinLoseScreen_to_GameplayHUD",
+          "type": "Button",
+          "label": "Open GameplayHUD",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('GameplayHUD')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_WinLoseScreen_to_LevelSelection",
+          "type": "Button",
+          "label": "Open LevelSelection",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('LevelSelection')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_WinLoseScreen_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "Profile",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 2,
+      "elements": [
+        {
+          "element_id": "Profile_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — PROFILE",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_Profile_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "screen_id": "DailyRewards",
+      "container_type": "PanelContainer -> VBoxContainer",
+      "safe_area_margins_px": {
+        "margin_left": 36,
+        "margin_right": 36,
+        "margin_top": 48,
+        "margin_bottom": 48
+      },
+      "element_count": 3,
+      "elements": [
+        {
+          "element_id": "DailyRewards_Title",
+          "type": "Label",
+          "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
+          "text_pattern": "STUDIO V2.0 — DAILYREWARDS",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_DailyRewards_to_Rewards",
+          "type": "Button",
+          "label": "Open Rewards",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('Rewards')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        },
+        {
+          "element_id": "Btn_DailyRewards_to_MainMenu",
+          "type": "Button",
+          "label": "Open MainMenu",
+          "min_size_px": {
+            "width_px": 180,
+            "height_px": 56
+          },
+          "states": [
+            "normal",
+            "hover",
+            "pressed",
+            "mobile_haptic_18ms"
+          ],
+          "color_palette_hex": [
+            "#1C3D7A",
+            "#61B8FF",
+            "#2957A3",
+            "#142E5C"
+          ],
+          "on_click_action": "show_screen('MainMenu')",
+          "evidence_tag": "VERIFIED",
+          "source_file": "scripts/ui_controller.gd"
+        }
+      ],
+      "evidence_tag": "VERIFIED"
+    }
+  ],
+  "navigation_state_graph": [
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_GameplayHUD",
+      "to_screen": "GameplayHUD",
+      "side_effect": "GameManager.load_level(current_level)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_LevelSelection",
+      "to_screen": "LevelSelection",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_Shop",
+      "to_screen": "Shop",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_Inventory",
+      "to_screen": "Inventory",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_DailyRewards",
+      "to_screen": "DailyRewards",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_Profile",
+      "to_screen": "Profile",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "MainMenu",
+      "button_id": "Btn_MainMenu_to_Settings",
+      "to_screen": "Settings",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "LoadingScreen",
+      "button_id": "Btn_LoadingScreen_to_GameplayHUD",
+      "to_screen": "GameplayHUD",
+      "side_effect": "GameManager.load_level(current_level)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "GameplayHUD",
+      "button_id": "Btn_GameplayHUD_to_PauseMenu",
+      "to_screen": "PauseMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "GameplayHUD",
+      "button_id": "Btn_GameplayHUD_to_WinLoseScreen",
+      "to_screen": "WinLoseScreen",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "PauseMenu",
+      "button_id": "Btn_PauseMenu_to_GameplayHUD",
+      "to_screen": "GameplayHUD",
+      "side_effect": "GameManager.load_level(current_level)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "PauseMenu",
+      "button_id": "Btn_PauseMenu_to_Settings",
+      "to_screen": "Settings",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "PauseMenu",
+      "button_id": "Btn_PauseMenu_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Settings",
+      "button_id": "Btn_Settings_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Shop",
+      "button_id": "Btn_Shop_to_Inventory",
+      "to_screen": "Inventory",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Shop",
+      "button_id": "Btn_Shop_to_Rewards",
+      "to_screen": "Rewards",
+      "side_effect": "add_coins(-25)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Shop",
+      "button_id": "Btn_Shop_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Inventory",
+      "button_id": "Btn_Inventory_to_Shop",
+      "to_screen": "Shop",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Inventory",
+      "button_id": "Btn_Inventory_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Rewards",
+      "button_id": "Btn_Rewards_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "LevelSelection",
+      "button_id": "Btn_LevelSelection_to_GameplayHUD",
+      "to_screen": "GameplayHUD",
+      "side_effect": "GameManager.load_level(current_level)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "LevelSelection",
+      "button_id": "Btn_LevelSelection_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "WinLoseScreen",
+      "button_id": "Btn_WinLoseScreen_to_GameplayHUD",
+      "to_screen": "GameplayHUD",
+      "side_effect": "GameManager.load_level(current_level)",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "WinLoseScreen",
+      "button_id": "Btn_WinLoseScreen_to_LevelSelection",
+      "to_screen": "LevelSelection",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "WinLoseScreen",
+      "button_id": "Btn_WinLoseScreen_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "Profile",
+      "button_id": "Btn_Profile_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "DailyRewards",
+      "button_id": "Btn_DailyRewards_to_Rewards",
+      "to_screen": "Rewards",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    },
+    {
+      "from_screen": "DailyRewards",
+      "button_id": "Btn_DailyRewards_to_MainMenu",
+      "to_screen": "MainMenu",
+      "side_effect": "none",
+      "evidence_tag": "VERIFIED"
+    }
+  ],
+  "visual_asset_and_screenshot_evidence": {
+    "local_visual_files_inspected": 5,
+    "visual_inventory": [
+      {
+        "file": "assets/icons/bomb_hazard.svg",
+        "format": "SVG",
+        "width": "128",
+        "height": "128",
+        "hex_colors": [
+          "#1E293B",
+          "#F43F5E",
+          "#FFCDD2",
+          "#FFD54F"
+        ],
+        "evidence_tag": "VERIFIED"
+      },
+      {
+        "file": "assets/icons/btn_play.svg",
+        "format": "SVG",
+        "width": "128",
+        "height": "128",
+        "hex_colors": [
+          "#00E676",
+          "#0F172A",
+          "#FFFFFF"
+        ],
+        "evidence_tag": "VERIFIED"
+      },
+      {
+        "file": "assets/icons/coin_badge.svg",
+        "format": "SVG",
+        "width": "128",
+        "height": "128",
+        "hex_colors": [
+          "#1E293B",
+          "#FBBF24",
+          "#FFF8E1"
+        ],
+        "evidence_tag": "VERIFIED"
+      },
+      {
+        "file": "assets/icons/shield_armor.svg",
+        "format": "SVG",
+        "width": "128",
+        "height": "128",
+        "hex_colors": [
+          "#0F172A",
+          "#38BDF8",
+          "#E0F7FA"
+        ],
+        "evidence_tag": "VERIFIED"
+      },
+      {
+        "file": "icon.svg",
+        "format": "SVG",
+        "width": "128",
+        "height": "128",
+        "hex_colors": [
+          "#0F172A",
+          "#38BDF8",
+          "#E0F7FA"
+        ],
+        "evidence_tag": "VERIFIED"
+      }
+    ],
+    "reference_store_screenshot_urls": [],
+    "reference_screenshots_evidence_tag": "UNKNOWN"
+  },
+  "reference_apk_layout_inspection": {
+    "apk_status": "NO_LEGAL_APK_PROVIDED",
+    "layout_xml_count": 0,
+    "layout_xml_files": [],
+    "evidence_tag": "UNKNOWN"
+  },
+  "replica_brand_clean_room_audit": {
+    "copied_reference_icons_or_logos": 0,
+    "copied_reference_layout_xmls": 0,
+    "trademark_collision_detected": false,
+    "status": "CLEAN_ROOM_ORIGINAL_UI_VERIFIED",
+    "evidence_tag": "VERIFIED"
+  }
+}
