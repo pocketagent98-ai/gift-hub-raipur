@@ -352,11 +352,13 @@ def resolve_command(ram_vault: Path) -> None:
     repo_order_file = Path("ORDER.md")
     if repo_order_file.exists():
         repo_order_txt = repo_order_file.read_text(encoding="utf-8")
-        if "GAME_ID: my_studio_game_01" in order_txt and "GAME_ID: my_studio_game_01" not in repo_order_txt and "GAME_ID:" in repo_order_txt:
+        # The checked-out repository ORDER is the auditable source for a workflow proof.
+        # A stale private-inbox order must never silently switch the requested GAME_ID.
+        if "GAME_ID:" in repo_order_txt and repo_order_txt.strip() != order_txt.strip():
             order_txt = repo_order_txt
             order_file.parent.mkdir(parents=True, exist_ok=True)
             order_file.write_text(repo_order_txt, encoding="utf-8")
-            print("[HF-VAULT] Updated HF inbox ORDER.md from repository ORDER.md override.")
+            print("[HF-VAULT] Repository ORDER.md is authoritative for this run; stale inbox order ignored.")
 
     def extract_field(key: str, default_val: str) -> str:
         m = re.search(rf"^{key}[ \t]*:[ \t]*(.*)$", order_txt, re.M | re.I)
