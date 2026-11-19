@@ -180,6 +180,10 @@ def verify_order_routing_and_rea_standby() -> list:
     hf_vault_sync.resolve_local_order(Path("/dev/shm/private_studio_vault"))
     results.append("PASS: ORDER.md routing (Play Store URL, Legal APK discovery, and REA Standby Dormant/Active toggle) verified")
     orig_order = Path("ORDER.md").read_text(encoding="utf-8")
+    expected_ref_game_id = next(
+        (line.split(":", 1)[1].strip() for line in orig_order.splitlines() if line.startswith("GAME_ID:")),
+        "block_juggle_cleanroom_01",
+    )
     try:
         game_update_and_monetization_controller.update_order_and_monetization(
             game_id="neon_cyber_runner_idea_01",
@@ -198,7 +202,7 @@ def verify_order_routing_and_rea_standby() -> list:
         hf_vault_sync.resolve_local_order(Path("/dev/shm/private_studio_vault"))
         dm_ref = dual_mode_game_factory.detect_and_prepare_creation_mode(Path("."))
         assert dm_ref["creation_origin"] == "PATH_A_REFERENCE_LINK_OR_APK"
-        assert dm_ref["game_id"] == "block_juggle_cleanroom_01"
+        assert dm_ref["game_id"] == expected_ref_game_id
     finally:
         Path("ORDER.md").write_text(orig_order, encoding="utf-8")
         hf_vault_sync.resolve_local_order(Path("/dev/shm/private_studio_vault"))
