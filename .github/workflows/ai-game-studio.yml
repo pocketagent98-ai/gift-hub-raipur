@@ -181,7 +181,7 @@ jobs:
               QUIT_FRAMES=4600
             fi
             xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" \
-              godot --editor --rendering-driver opengl3 --write-movie "$VID_AVI" --fixed-fps 24 --quit-after "$QUIT_FRAMES" \
+              godot --rendering-driver opengl3 --write-movie "$VID_AVI" --fixed-fps 24 --quit-after "$QUIT_FRAMES" \
               res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir="/tmp/studio_qa"
             if ls /tmp/qa_${SUITE}_*.png 1>/dev/null 2>&1; then
               montage /tmp/qa_${SUITE}_*.png -tile 2x2 -geometry 640x360+4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
