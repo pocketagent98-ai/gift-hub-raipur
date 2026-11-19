@@ -1,0 +1,36 @@
+{
+  "policy_schema_version": "1.0.0",
+  "last_verified_utc": "2026-11-14T00:00:00Z",
+  "official_policy_sources": {
+    "google_play_target_sdk_url": "https://developer.android.com/google/play/requirements/target-sdk",
+    "google_play_help_url": "https://support.google.com/googleplay/android-developer/answer/11926878?hl=en",
+    "android_sdk_platforms_url": "https://developer.android.com/tools/releases/platforms",
+    "godot_releases_api_url": "https://api.github.com/repos/godotengine/godot/releases"
+  },
+  "android_requirements": {
+    "new_apps_and_updates_target_sdk": 36,
+    "existing_apps_availability_floor_sdk": 35,
+    "compile_sdk": 36,
+    "min_sdk": 24,
+    "build_tools_version": "36.0.0",
+    "ndk_version": "27.2.12479018",
+    "architectures": [
+      "arm64-v8a",
+      "armeabi-v7a"
+    ]
+  },
+  "engine_requirements": {
+    "godot_version": "4.7.2",
+    "godot_release_tag": "4.7.2-stable",
+    "rendering_method": "gl_compatibility"
+  },
+  "update_governance": {
+    "auto_apply_to_production_without_approval": false,
+    "require_human_approval_pull_request": true,
+    "revert_immediately_on_test_failure": true,
+    "preserve_existing_game_package_name": true,
+    "preserve_permanent_signing_keystore": true,
+    "enforce_monotonic_version_code": true,
+    "enforce_save_data_schema_migration": true
+  }
+}

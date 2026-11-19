@@ -1,0 +1,17 @@
+{
+  "game_id": "block_juggle_cleanroom_01",
+  "action_mode": "new_game",
+  "game_category": "level_by_level",
+  "genre": "block_puzzle",
+  "use_rea": false,
+  "ref_link": "https://play.google.com/store/apps/details?id=com.block.juggle",
+  "apk_path": "",
+  "authorized_repo_path": "",
+  "reference_videos": [],
+  "reference_screenshots": [],
+  "missing_optional_inputs": [
+    "reference_apk_path",
+    "authorized_repo_path",
+    "reference_videos"
+  ]
+}

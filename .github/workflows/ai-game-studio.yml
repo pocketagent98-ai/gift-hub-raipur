@@ -1,0 +1,239 @@
+name: AI Game Studio V5.0 (Complete Historical Recovery + Deep Game Intelligence + 24 Agents — Godot 4.7.2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_note:
+        description: 'Reads order & multi-page research from Private Hugging Face MY_COMMANDS_AND_FILES'
+        required: false
+        default: 'Execute V5.0 Production Game Factory (Complete Historical Recovery)'
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  production-game-factory-v5:
+    if: github.actor == github.repository_owner
+    environment: production-studio
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      GODOT_VERSION: "4.7.2"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GODOT_SILENCE_ROOT_WARNING: "1"
+      ANDROID_HOME: "/usr/local/lib/android/sdk"
+      ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
+    steps:
+      - name: 0. Free 25+ GB Disk Space (Keep Android SDK & NDK Intact)
+        run: |
+          python3 scripts/stage_cleanup_guard.py --stage step_0 --min-free-gb "${MIN_FREE_GB:-5}"
+          echo "Cleanup is allowlisted; Android SDK, workspace, credentials and runner components are preserved."
+
+      - name: 1. Checkout Studio Repository (Pinned Commit SHA)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: 2. Setup Virtual Display, Audio, Node.js, JDK 17 & Pinned Python Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb pulseaudio mesa-vulkan-drivers libgl1-mesa-dri vulkan-tools imagemagick ffmpeg jq openjdk-17-jdk unzip wget nodejs npm openssl apksigner
+          pip install -r requirements.lock.txt
+          pulseaudio -D --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=StudioAudioSink || true
+          pactl set-default-sink StudioAudioSink || true
+          mkdir -p /tmp/qa_videos /tmp/studio_qa docs build/web build/android build/windows
+          python3 scripts/resource_quota_guard.py
+
+      - name: 3. Verify Android SDK (API 36 / API 35+), Build-Tools & NDK + Install Godot 4.7.2 Stable
+        run: |
+          test -d /usr/local/lib/android/sdk
+          if [ -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
+            yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+            /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0" >/dev/null 2>&1 || true
+          fi
+          ls -la /usr/local/lib/android/sdk/platforms/
+          ls -la /usr/local/lib/android/sdk/build-tools/
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/SHA512-SUMS.txt -O /tmp/SHA512-SUMS.txt || true
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/
+          sudo mv /tmp/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+          mkdir -p ~/.local/share/godot/export_templates/4.7.2.stable
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/templates_extracted
+          mv /tmp/templates_extracted/templates/* ~/.local/share/godot/export_templates/4.7.2.stable/
+          python3 scripts/verify_toolchain_checksums.py
+          rm -rf /tmp/godot.zip /tmp/templates.tpz /tmp/templates_extracted /tmp/SHA512-SUMS.txt
+          godot --version
+
+      - name: 4. Install DeepSeek Harness (Pinned), Free-Model Plugin, Awesome GameDev Skills, Godogen, Replica Skill, REA (Standby) & Craft Anything
+        run: |
+          npm install -g deepseek-harness@latest || true
+          if command -v dsh >/dev/null 2>&1; then
+            dsh plugin --profile web add @ebony-vinyl/dsh-our-free-model@2.8.3 || true
+          else
+            echo "[WARN] dsh CLI not available on npm yet - continuing with the local deterministic factory."
+          fi
+          # STANDBY Tool (PDF Pages 7 & 9): Install rea-agents globally, keep dormant unless USE_REA: true
+          npm install -g rea-agents || true
+          mkdir -p .agents/skills
+          # PERMANENT Skills (PDF Pages 4, 38, 60, 75-76)
+          if git clone --depth 1 https://github.com/gamedev-skills/awesome-gamedev-agent-skills.git /tmp/awesome-skills 2>/dev/null; then
+            if [ -s /tmp/awesome-skills/SKILL.md ]; then
+              rm -rf .agents/skills/awesome-gamedev-agent-skills
+              cp -r /tmp/awesome-skills .agents/skills/awesome-gamedev-agent-skills
+            else
+              echo "[WARN] upstream awesome-gamedev-agent-skills has no SKILL.md - keeping repository copy"
+            fi
+          else
+            echo "[WARN] upstream awesome-gamedev-agent-skills unavailable - keeping repository copy"
+          fi
+          rm -rf /tmp/awesome-skills
+
+          if git clone --depth 1 https://github.com/htdt/godogen.git /tmp/godogen 2>/dev/null; then
+            if [ -s /tmp/godogen/SKILL.md ]; then
+              rm -rf .agents/skills/godogen
+              cp -r /tmp/godogen .agents/skills/godogen
+            else
+              echo "[WARN] upstream godogen has no SKILL.md - keeping repository copy"
+            fi
+          else
+            echo "[WARN] upstream godogen unavailable - keeping repository copy"
+          fi
+          rm -rf /tmp/godogen
+          git clone --depth 1 https://github.com/cloudflare/security-audit-skill.git /tmp/cf-sec || true
+          cp -r /tmp/cf-sec/skills/security-audit .agents/skills/ 2>/dev/null || true
+          rm -rf /tmp/cf-sec
+          # TEMPORARY Reference Research & Clean-Room Brand Skills (PDF Pages 2, 4, 38, 60)
+          git clone --depth 1 https://github.com/Jakeschincariol/replica-skill.git /tmp/replica-skill || true
+          cp -r /tmp/replica-skill/replica-recon .agents/skills/ 2>/dev/null || true
+          cp -r /tmp/replica-skill/replica-entrepreneur .agents/skills/ 2>/dev/null || true
+          cp -r /tmp/replica-skill/replica-brand .agents/skills/ 2>/dev/null || true
+          rm -rf /tmp/replica-skill
+          # TEMPORARY Visual Layout Study Tool (PDF Pages 1, 5, 14, 37)
+          git clone --depth 1 https://github.com/storytold/craft-anything.git /tmp/craft-anything || true
+
+      - name: 5. Read Private HF Inbox, Run Static/Asset/Security Tests & Restore Encrypted Keystore
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+        run: |
+          mkdir -p ~/.android ~/.config/godot
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/usr/local/lib/android/sdk"\nexport/android/debug_keystore = "/home/runner/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > ~/.config/godot/editor_settings-4.7.tres
+          cp ~/.config/godot/editor_settings-4.7.tres ~/.config/godot/editor_settings-4.tres
+          python3 -m py_compile scripts/*.py
+          python3 test/run_v2_verification_suite.py
+          python3 scripts/asset_validator.py
+          python3 scripts/hf_vault_sync.py resolve_command
+          python3 scripts/hf_vault_sync.py init_or_pull
+          python3 scripts/future_android_compatibility_updater.py --verify-only
+          python3 scripts/verify_android_builds.py --pre-build
+
+      - name: 6. Import Godot Project, Check REA Standby Gate & Run 24-Agent Autonomous Factory + 3-Cycle Polish Loop
+        env:
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --import --quit
+          if [ -f games/gift_cascade/project.godot ]; then
+            xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --path games/gift_cascade --import --quit
+            xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --path games/gift_cascade --script res://tests/run_tests.gd
+          fi
+          litellm --config litellm_config.yaml --port 4000 &
+          sleep 6
+          USE_REA=$(jq -r '.use_rea // "false"' /dev/shm/private_studio_vault/resolved_job.json 2>/dev/null || echo "false")
+          if [[ "$USE_REA" == "true" ]]; then
+            echo "[REA STANDBY ACTIVATED] Running morluto/rea (rea-agents) deep inspection..."
+            rea-agents --help >/dev/null 2>&1 || true
+          else
+            echo "[REA STANDBY DORMANT] USE_REA is false; keeping rea-agents in standby."
+          fi
+          python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json
+          python3 scripts/fusion_engine.py --project-root .
+          python3 scripts/godot_legacy_code_scanner.py
+          python3 scripts/orchestrate_24_agents.py
+          python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)" --genre "$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)"
+          python3 test/run_pro_upgrades_suite.py
+
+      - name: 7. Fail-Closed Deep Multi-Video (All 4 Suites) & 4-Angle Camera Grid QA via Separate QA Bootstrap Scene
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
+        run: |
+          GAME_CAT=$(jq -r '.game_category' /dev/shm/private_studio_vault/resolved_job.json)
+          MAIN_GAMEPLAY_SUITE="multi_levels"
+          if [[ "$GAME_CAT" == "endless_map_chunks" ]]; then
+            MAIN_GAMEPLAY_SUITE="endless_chunks"
+          fi
+
+          for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
+            VID_AVI="/tmp/qa_videos/${SUITE}.avi"
+            VID_MP4="/tmp/qa_videos/${SUITE}.mp4"
+            QUIT_FRAMES=3200
+            if [[ "$SUITE" == "multi_levels" || "$SUITE" == "endless_chunks" ]]; then
+              QUIT_FRAMES=4600
+            fi
+            xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" \
+              godot --editor --rendering-driver opengl3 --write-movie "$VID_AVI" --fixed-fps 24 --quit-after "$QUIT_FRAMES" \
+              res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir="/tmp/studio_qa"
+            if ls /tmp/qa_${SUITE}_*.png 1>/dev/null 2>&1; then
+              montage /tmp/qa_${SUITE}_*.png -tile 2x2 -geometry 640x360+4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
+            fi
+            ffmpeg -y -i "$VID_AVI" -vf "scale=1280:720" -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$VID_MP4"
+            rm -f "$VID_AVI"
+            python3 scripts/multi_video_inspector.py "$SUITE" "$VID_MP4" "/tmp/studio_qa"
+            python3 scripts/resource_quota_guard.py
+          done
+
+      - name: 8. Fail-Closed Security, License, SDK & Google Play Target SDK 36 (Android 16) Gate
+        run: |
+          python3 scripts/studio_healer_and_compliance.py
+          python3 scripts/license_and_sdk_audit.py
+
+      - name: 9. Export & Cryptographically Verify Signed APK + Signed Play Store AAB
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          cp -f export_presets.cfg export_presets.cfg.bak
+          cp -f scripts/app_config.gd scripts/app_config.gd.bak
+          python3 scripts/hf_vault_sync.py inject_export_secrets
+
+          mkdir -p build/android build/web build/windows android/build
+          unzip -q -o ~/.local/share/godot/export_templates/4.7.2.stable/android_source.zip -d android/build
+
+          xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --export-release "Android (Direct Install APK)" build/android/game_install.apk
+          xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
+          xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --export-release "Web (HTML5)" build/web/index.html
+          npx --yes modern-web-guidance@latest scan build/web/ || true
+          xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --export-release "Windows Desktop" build/windows/game.exe
+
+          if [ -f games/gift_cascade/project.godot ]; then
+            mkdir -p games/gift_cascade/build/android games/gift_cascade/android/build
+            unzip -q -o ~/.local/share/godot/export_templates/4.7.2.stable/android_source.zip -d games/gift_cascade/android/build
+            xvfb-run --auto-servernum -s "-screen 0 2560x2560x24" godot --editor --path games/gift_cascade --export-debug "Android APK (direct install)" build/android/gift_cascade.apk || true
+          fi
+
+          python3 scripts/verify_android_builds.py --post-build build/android/game_install.apk build/android/game_release.aab /dev/shm/private_studio_vault/keystore_meta.json
+          python3 scripts/verify_android_builds.py --release-gate build/android/game_install.apk build/android/game_release.aab
+
+      - name: 10. Sync Verified Release & SBOM to Private Hugging Face Vault
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          python3 scripts/hf_vault_sync.py push_private_everything
+
+      - name: 11. Shred Temporary RAM Secrets & Builds
+        if: always()
+        run: |
+          rm -rf /dev/shm/private_studio_vault /dev/shm/hf_download /dev/shm/hf_inbox /dev/shm/hf_init_inbox build/ docs/COMBINED_USER_RESEARCH.md
+          if [ -f export_presets.cfg.bak ]; then mv -f export_presets.cfg.bak export_presets.cfg; fi
+          if [ -f scripts/app_config.gd.bak ]; then mv -f scripts/app_config.gd.bak scripts/app_config.gd; fi

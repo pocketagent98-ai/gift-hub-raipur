@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "engine": "replica-craft-clean-room-fusion",
+  "source_evidence": {
+    "reference_dossier": true,
+    "ui_map": true,
+    "review_confidence": "UNKNOWN"
+  },
+  "mechanics_summary": {
+    "genre": "original_mobile_puzzle",
+    "preserved_player_benefits": [
+      "responsive placement",
+      "legible combo feedback",
+      "short offline sessions"
+    ],
+    "proprietary_expression_excluded": true
+  },
+  "ui_map_summary": {
+    "screen_count": 12,
+    "minimum_touch_target_px": 56,
+    "layout_source": "repository-generated interaction map"
+  },
+  "unique_upgrade_proposals": [
+    {
+      "name": "Smart Mercy & Juggle Vault",
+      "originality": "new rescue-piece and hold-slot rule"
+    },
+    {
+      "name": "Crystal Fever Overdrive",
+      "originality": "new combo reward state"
+    },
+    {
+      "name": "Streak Booster Forge",
+      "originality": "new progression reward cadence"
+    }
+  ],
+  "clean_room_constraints": [
+    "no copied assets, source code, branding, levels, or distinctive protected expression",
+    "procedural/original assets only",
+    "record licenses and attribution in ASSET_LICENSE_MANIFEST"
+  ]
+}

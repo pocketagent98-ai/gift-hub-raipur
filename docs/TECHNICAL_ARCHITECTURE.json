@@ -1,0 +1,33 @@
+{
+  "schema_version": "5.0.0",
+  "engine": "Godot 4.7.2 Stable (gl_compatibility)",
+  "dynamic_android_policy_file": "config/android_compatibility_policy.json",
+  "active_target_sdk": 36,
+  "active_min_sdk": 24,
+  "coding_harness": "DeepSeek Harness (dsh) + @ebony-vinyl/dsh-our-free-model@2.8.3",
+  "permanent_skills": [
+    "gamedev-skills/awesome-gamedev-agent-skills",
+    "htdt/godogen",
+    "cloudflare/security-audit-skill",
+    "modern-web-guidance"
+  ],
+  "temporary_research_skills": [
+    "Jakeschincariol/replica-skill",
+    "storytold/craft-anything"
+  ],
+  "standby_tools": [
+    "morluto/rea (rea-agents \u2014 active only when USE_REA=true)"
+  ],
+  "autoload_singletons": [
+    "SaveManager",
+    "AudioDirector",
+    "GameManager",
+    "MonetizationManager",
+    "StudioThemeAndVFX",
+    "AppConfig",
+    "AnalyticsManager"
+  ],
+  "qa_isolation": "scenes/qa_bootstrap.tscn (excluded from production export_presets.cfg)",
+  "git_rollback_mechanism": "git tag -f safe-AGENT_XX -> 3 attempts -> automatic git reset --hard safe-AGENT_XX",
+  "evidence_tag": "VERIFIED"
+}

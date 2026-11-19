@@ -1,0 +1,56 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "ai-game-studio-v5-build",
+      "version": "5.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "litellm",
+      "version": "1.78.0"
+    },
+    {
+      "type": "library",
+      "name": "openai",
+      "version": "1.109.1"
+    },
+    {
+      "type": "library",
+      "name": "google-genai",
+      "version": "1.10.0"
+    },
+    {
+      "type": "library",
+      "name": "google-play-scraper",
+      "version": "1.2.7"
+    },
+    {
+      "type": "library",
+      "name": "huggingface_hub",
+      "version": "0.34.4"
+    },
+    {
+      "type": "library",
+      "name": "pypdf",
+      "version": "5.4.0"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "game_install.apk",
+      "sha256": "51da9953ca90f992a8c11da3e5ac437d9c1a6afa57b747c8ba33e39ec8cb9fe3",
+      "size_bytes": 3380
+    },
+    {
+      "name": "game_release.aab",
+      "sha256": "b56491279652d9a0d0a60f3677d766ace268ef68e97584b20bddc245d739d38e",
+      "size_bytes": 3422
+    }
+  ]
+}
