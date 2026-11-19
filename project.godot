@@ -33,6 +33,7 @@ window/handheld/orientation=1
 
 [physics]
 
+# Verified 60Hz physics tick lock: physics_ticks_per_second=60
 common/physics_ticks_per_second=60
 
 [rendering]
