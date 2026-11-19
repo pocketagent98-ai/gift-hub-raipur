@@ -25,13 +25,13 @@ jobs:
       ANDROID_HOME: "/usr/local/lib/android/sdk"
       ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
     steps:
-      - name: 0. Free 25+ GB Disk Space (Keep Android SDK & NDK Intact)
+      - name: 0. Checkout Studio Repository (Pinned Commit SHA)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: 1. Free 25+ GB Disk Space (Keep Android SDK & NDK Intact)
         run: |
           python3 scripts/stage_cleanup_guard.py --stage step_0 --min-free-gb "${MIN_FREE_GB:-5}"
           echo "Cleanup is allowlisted; Android SDK, workspace, credentials and runner components are preserved."
-
-      - name: 1. Checkout Studio Repository (Pinned Commit SHA)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: 2. Setup Virtual Display, Audio, Node.js, JDK 17 & Pinned Python Dependencies
         run: |
