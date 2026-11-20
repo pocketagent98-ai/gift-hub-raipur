@@ -350,6 +350,10 @@ def verify_24_agents_honest_blocked_reporting_and_git_rollback() -> list:
 
 def verify_future_proof_android_update_system_and_supply_chain() -> list:
     results = []
+    presets_baseline = Path("export_presets.cfg").read_text(encoding="utf-8")
+    direct_apk_section = presets_baseline.split('name="Android (Direct Install APK)"', 1)[1].split("[preset.3]", 1)[0]
+    assert "gradle_build/use_gradle_build=true" in direct_apk_section
+    results.append("PASS: Android Direct Install APK uses Gradle when SDK overrides are configured")
     # 1. Verify pinned supply chain & checksums
     sc = verify_toolchain_checksums.verify_pinned_supply_chain(Path("."))
     assert sc["status"] == "PASS" and sc["requirements_lock_pinned"] is True
