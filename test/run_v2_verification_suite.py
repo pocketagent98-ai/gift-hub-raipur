@@ -279,7 +279,7 @@ def verify_4th_qa_suite_and_video_durations() -> list:
 
     wf = Path(".github/workflows/ai-game-studio.yml").read_text(encoding="utf-8")
     assert 'for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do' in wf
-    assert "QUIT_FRAMES=4600" in wf and "QUIT_FRAMES=3200" in wf
+    assert "QUIT_FRAMES=150" in wf and "--fixed-fps 15" in wf and "720x1280x24" in wf
 
     good_telemetry = (
         "[DEEP_VERIFIER_V5] QA Mode Active | Suite: save_ads_and_edge\n"

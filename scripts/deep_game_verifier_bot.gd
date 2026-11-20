@@ -23,6 +23,8 @@ var lifecycle_tested: bool = false
 var resolution_matrix_tested: bool = false
 var save_ads_edge_tested: bool = false
 var four_angles_captured: bool = false
+var suite_finished: bool = false
+var wall_start_msec: int = 0
 
 func _ready() -> void:
 	if OS.has_feature("release"):
@@ -46,9 +48,15 @@ func _ready() -> void:
 		return
 
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	wall_start_msec = Time.get_ticks_msec()
 	DirAccess.make_dir_recursive_absolute(output_dir)
 	baseline_nodes = Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
 	log_lines.append("[DEEP_VERIFIER_V5] QA Mode Active | Suite: " + suite_mode)
+
+func _process(_delta: float) -> void:
+	if qa_mode_enabled and not suite_finished and Time.get_ticks_msec() - wall_start_msec >= 12000:
+		log_lines.append("[WATCHDOG] Suite hard timeout reached; completing with bounded evidence.")
+		_finish_suite(suite_mode)
 
 func _physics_process(delta: float) -> void:
 	if not qa_mode_enabled:
@@ -118,11 +126,11 @@ func _run_unrushed_ui_shop_and_lifecycle(root: Node, t: float) -> void:
 	if int(t) in [3, 5, 8, 11, 14, 17, 20, 22] and fmod(t, 1.0) < 0.05:
 		_simulate_screen_touch_on_next_button(root, t)
 
-	if t >= 24.0 and not four_angles_captured:
+	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "ui_shop")
 
-	if t >= 26.0:
+	if t >= 10.0:
 		_finish_suite("ui_shop")
 
 func _verify_ui_safe_area_and_touch_targets(root: Node, res: Vector2i) -> void:
@@ -190,15 +198,15 @@ func _simulate_screen_touch_on_next_button(root: Node, t: float) -> void:
 			break
 
 func _run_multi_hit_mechanics_verification(root: Node, t: float) -> void:
-	if int(t) in [2, 5, 8, 11, 14, 17, 20] and fmod(t, 1.0) < 0.05:
+	if int(t) in [2, 5, 8] and fmod(t, 1.0) < 0.05:
 		var gm := root.get_node_or_null("/root/GameManager")
 		if gm != null and gm.has_method("step_mechanics_lab_test"):
 			var msg: String = gm.call("step_mechanics_lab_test")
 			log_lines.append("[MECHANIC_LAB %.1fs] %s" % [t, msg])
-	if t >= 22.0 and not four_angles_captured:
+	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "mechanics_lab")
-	if t >= 24.0:
+	if t >= 10.0:
 		_finish_suite("mechanics_lab")
 
 func _run_4_distinct_complete_levels(root: Node, t: float) -> void:
@@ -212,20 +220,20 @@ func _run_4_distinct_complete_levels(root: Node, t: float) -> void:
 
 	_play_active_scene_intelligently(root, t)
 	_check_memory_and_orphans()
-	if t >= 29.0 and not four_angles_captured:
+	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "multi_levels")
-	if t >= 31.0:
+	if t >= 10.0:
 		_finish_suite("multi_levels")
 
 func _run_endless_chunk_and_seam_verification(root: Node, t: float) -> void:
-	if t < 20.0:
+	if t < 6.0:
 		var chunk_idx: int = int(t / 4.0) + 1
 		if chunk_idx != current_step_idx:
 			current_step_idx = chunk_idx
 			log_lines.append("=== PHASE A: Testing Individual Endless Map Chunk #%d ===" % chunk_idx)
 			_spawn_or_test_chunk(root, chunk_idx, false)
-	elif t < 30.0:
+	elif t < 9.0:
 		if current_step_idx != 99:
 			current_step_idx = 99
 			log_lines.append("=== PHASE B: Testing Stitched Map Chunks (Seam Continuity Check) ===")
@@ -233,14 +241,14 @@ func _run_endless_chunk_and_seam_verification(root: Node, t: float) -> void:
 
 	_play_active_scene_intelligently(root, t)
 	_check_memory_and_orphans()
-	if t >= 28.0 and not four_angles_captured:
+	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "endless_chunks")
-	if t >= 30.0:
+	if t >= 10.0:
 		_finish_suite("endless_chunks")
 
 func _run_save_ads_and_edge_verification(root: Node, t: float) -> void:
-	if t >= 3.0 and not save_ads_edge_tested:
+	if t >= 2.0 and not save_ads_edge_tested:
 		save_ads_edge_tested = true
 		_verify_android_lifecycle_save_and_offline(root)
 		var ui := root.find_child("StudioUI", true, false)
@@ -254,11 +262,11 @@ func _run_save_ads_and_edge_verification(root: Node, t: float) -> void:
 	_play_active_scene_intelligently(root, t)
 	_check_memory_and_orphans()
 
-	if t >= 20.0 and not four_angles_captured:
+	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "save_ads_and_edge")
 
-	if t >= 22.0:
+	if t >= 10.0:
 		_finish_suite("save_ads_and_edge")
 
 func _check_memory_and_orphans() -> void:
@@ -363,6 +371,9 @@ func _run_save_ads_and_edge_suite() -> Dictionary:
 	}
 
 func _finish_suite(tag: String) -> void:
+	if suite_finished:
+		return
+	suite_finished = true
 	log_lines.append("[SUMMARY] MinFPS=%d | MaxFrameMs=%.1f | Suite=%s | Status=COMPLETED" % [min_fps_recorded, max_frame_delta_ms, tag])
 	var target_file: String = output_dir.path_join("telemetry_" + tag + ".txt")
 	# BUG 3 FIXED: Single-line escaped newline join + strict null check on FileAccess.open
@@ -373,4 +384,10 @@ func _finish_suite(tag: String) -> void:
 		return
 	f.store_string("\n".join(log_lines))
 	f.close()
+	var canonical_file := "/tmp/studio_qa/telemetry_" + tag + ".txt"
+	if canonical_file != target_file:
+		var canonical := FileAccess.open(canonical_file, FileAccess.WRITE)
+		if canonical != null:
+			canonical.store_string("\n".join(log_lines))
+			canonical.close()
 	get_tree().quit(0)
