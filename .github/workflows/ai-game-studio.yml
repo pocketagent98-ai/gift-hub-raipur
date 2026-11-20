@@ -228,8 +228,10 @@ jobs:
           cp -f scripts/app_config.gd scripts/app_config.gd.bak
           timeout -k 15s 60s python3 scripts/hf_vault_sync.py inject_export_secrets
 
-          mkdir -p build/android build/web build/windows android/build
-          timeout -k 15s 45s unzip -q -o ~/.local/share/godot/export_templates/4.7.2.stable/android_source.zip -d android/build
+          mkdir -p build/android build/web build/windows android
+          rm -rf android/build
+          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --path . --install-android-build-template
+          test -s android/build/config.gradle
 
           timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --export-release "Android (Direct Install APK)" build/android/game_install.apk
           timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
@@ -238,8 +240,9 @@ jobs:
           timeout -k 15s 120s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --export-release "Windows Desktop" build/windows/game.exe
 
           if [ -f games/gift_cascade/project.godot ]; then
-            mkdir -p games/gift_cascade/build/android games/gift_cascade/android/build
-            timeout -k 15s 45s unzip -q -o ~/.local/share/godot/export_templates/4.7.2.stable/android_source.zip -d games/gift_cascade/android/build
+            mkdir -p games/gift_cascade/build/android games/gift_cascade/android
+            rm -rf games/gift_cascade/android/build
+            timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --path games/gift_cascade --install-android-build-template
             timeout -k 15s 120s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --path games/gift_cascade --export-debug "Android APK (direct install)" build/android/gift_cascade.apk || true
           fi
 

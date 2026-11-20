@@ -9,6 +9,7 @@ config_version=5
 config/name="Autonomous AI Studio Game V2"
 config/description="Commercial-Grade Polished 3D Game (Godot 4.7.2)"
 config/version="2.0.1"
+config/icon="res://icon.svg"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
