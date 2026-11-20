@@ -36,10 +36,21 @@ jobs:
           echo "Cleanup is allowlisted; Android SDK, workspace, credentials and runner components are preserved."
 
       - name: 2. Setup Virtual Display, Audio, Node.js, JDK 17 & Pinned Python Dependencies
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: |
           timeout -k 15s 180s sudo apt-get update
-          timeout -k 15s 240s sudo apt-get install -y xvfb pulseaudio mesa-vulkan-drivers libgl1-mesa-dri vulkan-tools imagemagick ffmpeg jq openjdk-17-jdk unzip wget nodejs npm openssl apksigner
+          APT_REQUIRED=(xvfb pulseaudio mesa-vulkan-drivers libgl1-mesa-dri vulkan-tools imagemagick ffmpeg jq openjdk-17-jdk unzip wget nodejs npm openssl apksigner)
+          APT_MISSING=()
+          for pkg in "${APT_REQUIRED[@]}"; do
+            if ! dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null | grep -q '^ii '; then
+              APT_MISSING+=("$pkg")
+            fi
+          done
+          if [ "${#APT_MISSING[@]}" -gt 0 ]; then
+            timeout -k 15s 600s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_MISSING[@]}"
+          else
+            echo "All required GUI/build packages are already installed."
+          fi
           timeout -k 15s 240s pip install -r requirements.lock.txt
           pulseaudio -D --exit-idle-time=-1 || true
           pactl load-module module-null-sink sink_name=StudioAudioSink || true
@@ -184,6 +195,7 @@ jobs:
           for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
             VID_AVI="/tmp/qa_videos/${SUITE}.avi"
             VID_MP4="/tmp/qa_videos/${SUITE}.mp4"
+            rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$VID_AVI" "$VID_MP4"
             QUIT_FRAMES=150
             if [[ "$SUITE" == "multi_levels" || "$SUITE" == "endless_chunks" ]]; then
               QUIT_FRAMES=150
@@ -191,6 +203,7 @@ jobs:
             timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
               godot --rendering-driver opengl3 --write-movie "$VID_AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" \
               res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir="/tmp/studio_qa"
+            test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
             if ls /tmp/qa_${SUITE}_*.png 1>/dev/null 2>&1; then
               timeout -k 15s 30s montage /tmp/qa_${SUITE}_*.png -tile 2x2 -geometry 640x360+4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
             fi
