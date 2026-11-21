@@ -313,12 +313,12 @@ def verify_24_agents_honest_blocked_reporting_and_git_rollback() -> list:
             blocked_count += 1
     if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
         verified_count = sum(
-            entry.get("execution_mode") == "VERIFIED_STAGE_ARTIFACTS"
+            entry.get("live_ai_or_cloud_binary_status", "").startswith("VERIFIED_COMPLETE")
             for entry in exec_log
         )
         assert verified_count >= 10, (
             "GitHub Actions has a real toolchain, so at least 10 agents must report "
-            "VERIFIED_STAGE_ARTIFACTS; the cloud evidence is incomplete."
+            "VERIFIED_COMPLETE cloud evidence; the cloud evidence is incomplete."
         )
     else:
         assert blocked_count >= 10, "Expected offline sandbox to honestly mark live AI/Godot binary steps as BLOCKED_IN_OFFLINE_SANDBOX!"
