@@ -135,6 +135,13 @@ jobs:
         timeout-minutes: 8
         run: |
           mkdir -p ~/.config/godot
+          test -d /usr/local/lib/android/sdk
+          if [ -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
+            timeout -k 15s 90s bash -c 'yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1' || true
+            timeout -k 15s 180s /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0"
+          fi
+          test -d /usr/local/lib/android/sdk/build-tools
+          find /usr/local/lib/android/sdk/build-tools -mindepth 1 -maxdepth 1 -type d -print -quit
           timeout -k 15s 120s wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -O /tmp/godot.zip
           timeout -k 15s 45s unzip -q /tmp/godot.zip -d /tmp/godot_extract
           sudo mv /tmp/godot_extract/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
