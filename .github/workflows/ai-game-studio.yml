@@ -126,6 +126,11 @@ jobs:
         timeout-minutes: 7
         run: |
           timeout -k 15s 45s python3 scripts/stage_cleanup_guard.py --stage stage3 --min-free-gb "${MIN_FREE_GB:-5}"
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            timeout -k 15s 90s sudo apt-get update
+            timeout -k 15s 180s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+          fi
+          command -v ffmpeg
           timeout -k 15s 90s pip install -r requirements.lock.txt
           mkdir -p /dev/shm/private_studio_vault /tmp/qa_videos ~/.config/godot
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
