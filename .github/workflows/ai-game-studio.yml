@@ -146,7 +146,16 @@ jobs:
           timeout -k 15s 45s unzip -q /tmp/godot.zip -d /tmp/godot_extract
           sudo mv /tmp/godot_extract/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --path . --install-android-build-template
+          # The Godot CLI installer starts a Vulkan-only helper on this runner.
+          # Install the official 4.7.2 android_source.zip from the pinned export
+          # template archive instead, preserving Gradle metadata/config.gradle.
+          timeout -k 15s 240s wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -O /tmp/templates.tpz
+          rm -rf android/build /tmp/android_source.zip
+          timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_source.zip > /tmp/android_source.zip'
+          mkdir -p android/build
+          timeout -k 15s 90s unzip -q /tmp/android_source.zip -d android/build
+          test -s android/build/config.gradle
+          test -s android/build/build.gradle
       - name: Fail-closed QA videos and telemetry
         timeout-minutes: 8
         run: |
