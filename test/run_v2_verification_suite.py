@@ -19,6 +19,7 @@ Executes real, verifiable unit and integration tests across all subsystems:
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import py_compile
 import subprocess
@@ -310,7 +311,17 @@ def verify_24_agents_honest_blocked_reporting_and_git_rollback() -> list:
         assert entry["execution_mode"] != "VERIFIED_STAGE_ARTIFACTS"
         if "BLOCKED_IN_OFFLINE_SANDBOX" in entry.get("live_ai_or_cloud_binary_status", ""):
             blocked_count += 1
-    assert blocked_count >= 10, "Expected offline sandbox to honestly mark live AI/Godot binary steps as BLOCKED_IN_OFFLINE_SANDBOX!"
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        verified_count = sum(
+            entry.get("execution_mode") == "VERIFIED_STAGE_ARTIFACTS"
+            for entry in exec_log
+        )
+        assert verified_count >= 10, (
+            "GitHub Actions has a real toolchain, so at least 10 agents must report "
+            "VERIFIED_STAGE_ARTIFACTS; the cloud evidence is incomplete."
+        )
+    else:
+        assert blocked_count >= 10, "Expected offline sandbox to honestly mark live AI/Godot binary steps as BLOCKED_IN_OFFLINE_SANDBOX!"
 
     with tempfile.TemporaryDirectory() as tmpd:
         repo = Path(tmpd)
