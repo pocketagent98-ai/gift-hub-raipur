@@ -139,7 +139,7 @@ jobs:
           timeout -k 15s 45s unzip -q /tmp/godot.zip -d /tmp/godot_extract
           sudo mv /tmp/godot_extract/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --path . --install-android-build-template
+          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --path . --install-android-build-template
       - name: Fail-closed QA videos and telemetry
         timeout-minutes: 8
         run: |
@@ -151,7 +151,7 @@ jobs:
           for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
             AVI="/tmp/qa_videos/${SUITE}.avi"; MP4="/tmp/qa_videos/${SUITE}.mp4"
             rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$AVI" "$MP4"
-            timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
+            timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
             test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
             timeout -k 15s 60s ffmpeg -y -i "$AVI" -vf scale=1280:720 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
             rm -f "$AVI"
@@ -164,8 +164,8 @@ jobs:
           cp -f scripts/app_config.gd scripts/app_config.gd.bak
           timeout -k 15s 60s python3 scripts/hf_vault_sync.py inject_export_secrets
           mkdir -p build/android
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --export-release "Android (Direct Install APK)" build/android/game_install.apk
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
+          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --export-release "Android (Direct Install APK)" build/android/game_install.apk
+          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
           test -s build/android/game_install.apk
           test -s build/android/game_release.aab
           timeout -k 15s 120s python3 scripts/verify_android_builds.py --post-build build/android/game_install.apk build/android/game_release.aab /dev/shm/private_studio_vault/keystore_meta.json
