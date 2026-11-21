@@ -643,6 +643,64 @@ def push_private_everything(ram_vault: Path) -> None:
     print(f"[HF-VAULT] Synced verified release to https://huggingface.co/datasets/{hf_repo}/tree/main/GAMES_VAULT/{game_id}")
 
 
+def _relay_job_info(ram_vault: Path) -> tuple[dict, str, Any]:
+    api, snapshot_download, hf_token, hf_repo = get_hf_api()
+    job_path = ram_vault / "resolved_job.json"
+    if not job_path.exists():
+        raise RuntimeError("[FAIL_CLOSED] resolved_job.json missing for HF relay.")
+    job_info = json.loads(job_path.read_text(encoding="utf-8"))
+    return job_info, hf_repo, (api, snapshot_download, hf_token)
+
+
+def push_stage1_blueprints(ram_vault: Path) -> None:
+    job_info, hf_repo, (api, _, _) = _relay_job_info(ram_vault)
+    game_id = validate_game_id(job_info["game_id"])
+    stage = Path("/dev/shm/stage1_blueprints")
+    stage.mkdir(parents=True, exist_ok=True)
+    for source in (Path("docs"), Path("ORDER.md")):
+        if source.is_dir():
+            safe_copy_tree(source, stage / "docs")
+        elif source.exists():
+            shutil.copy2(source, stage / source.name)
+    (stage / "stage_manifest.json").write_text(json.dumps({"game_id": game_id, "stage": "stage1"}, indent=2), encoding="utf-8")
+    api.upload_folder(folder_path=str(stage), path_in_repo=f"GAMES_VAULT/{game_id}/staging/stage1", repo_id=hf_repo, repo_type="dataset", commit_message=f"Stage 1 blueprints for {game_id}")
+    print(f"[HF-VAULT] Uploaded stage1 relay for {game_id}")
+
+
+def pull_stage1_blueprints(ram_vault: Path) -> None:
+    job_info, hf_repo, (_, snapshot_download, hf_token) = _relay_job_info(ram_vault)
+    game_id = validate_game_id(job_info["game_id"])
+    dl = Path("/dev/shm/hf_stage1")
+    shutil.rmtree(dl, ignore_errors=True)
+    snapshot_download(repo_id=hf_repo, repo_type="dataset", allow_patterns=[f"GAMES_VAULT/{game_id}/staging/stage1/**"], local_dir=str(dl), token=hf_token)
+    source = dl / "GAMES_VAULT" / game_id / "staging" / "stage1"
+    if not (source / "stage_manifest.json").exists():
+        raise RuntimeError("[FAIL_CLOSED] HF stage1 manifest is missing.")
+    if (source / "docs").exists():
+        safe_copy_tree(source / "docs", Path("docs"))
+    print(f"[HF-VAULT] Pulled stage1 relay for {game_id}")
+
+
+def push_stage2_project(ram_vault: Path) -> None:
+    job_info, hf_repo, (api, _, _) = _relay_job_info(ram_vault)
+    game_id = validate_game_id(job_info["game_id"])
+    api.upload_folder(folder_path=".", path_in_repo=f"GAMES_VAULT/{game_id}/staging/stage2_project", repo_id=hf_repo, repo_type="dataset", ignore_patterns=[".git/*", "build/*", "/tmp/*", "__pycache__/*", "*.apk", "*.aab"], commit_message=f"Stage 2 project for {game_id}")
+    print(f"[HF-VAULT] Uploaded stage2 project relay for {game_id}")
+
+
+def pull_stage2_project(ram_vault: Path) -> None:
+    job_info, hf_repo, (_, snapshot_download, hf_token) = _relay_job_info(ram_vault)
+    game_id = validate_game_id(job_info["game_id"])
+    dl = Path("/dev/shm/hf_stage2")
+    shutil.rmtree(dl, ignore_errors=True)
+    snapshot_download(repo_id=hf_repo, repo_type="dataset", allow_patterns=[f"GAMES_VAULT/{game_id}/staging/stage2_project/**"], local_dir=str(dl), token=hf_token)
+    source = dl / "GAMES_VAULT" / game_id / "staging" / "stage2_project"
+    if not (source / "project.godot").exists():
+        raise RuntimeError("[FAIL_CLOSED] HF stage2 project is missing project.godot.")
+    safe_copy_tree(source, Path("."))
+    print(f"[HF-VAULT] Pulled stage2 project relay for {game_id}")
+
+
 def main() -> None:
     ram_vault = Path("/dev/shm/private_studio_vault")
     ram_vault.mkdir(parents=True, exist_ok=True)
@@ -657,6 +715,14 @@ def main() -> None:
         inject_export_config(ram_vault)
     elif cmd == "push_private_everything":
         push_private_everything(ram_vault)
+    elif cmd == "push_stage1_blueprints":
+        push_stage1_blueprints(ram_vault)
+    elif cmd == "pull_stage1_blueprints":
+        pull_stage1_blueprints(ram_vault)
+    elif cmd == "push_stage2_project":
+        push_stage2_project(ram_vault)
+    elif cmd == "pull_stage2_project":
+        pull_stage2_project(ram_vault)
     else:
         raise ValueError(f"Unknown command: {cmd}")
 

@@ -71,4 +71,13 @@ func _trigger_tone(freq: float, duration: float) -> void:
 					var env := 1.0 - (t / duration)
 					var sample := sin(TAU * freq * t) * 0.25 * env
 					playback.push_frame(Vector2(sample, sample))
-			break
+				break
+
+func cleanup_qa_runtime_objects() -> void:
+	for p in sfx_players:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	if is_instance_valid(music_player):
+		music_player.stop()
+		music_player.stream = null

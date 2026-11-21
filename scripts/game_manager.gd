@@ -344,6 +344,17 @@ func _clear_children(n: Node) -> void:
 	for c in n.get_children():
 		c.queue_free()
 
+func cleanup_qa_runtime_objects() -> void:
+	# QA uses deferred queue_free; release mechanics-lab and world nodes before exit.
+	if is_instance_valid(lab_target):
+		lab_target.queue_free()
+	lab_target = null
+	var world := get_tree().root.get_node_or_null("Main/WorldRoot") as Node3D
+	if world != null:
+		_clear_children(world)
+	active_targets.clear()
+	active_chunks.clear()
+
 var fever_overdrive_active: bool = false
 
 func activate_mercy_rescue_and_juggle_vault() -> String:

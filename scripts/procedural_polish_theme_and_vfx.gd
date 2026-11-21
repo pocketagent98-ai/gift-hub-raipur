@@ -1,5 +1,7 @@
 extends Node
 
+var _qa_particles: Array[CPUParticles3D] = []
+
 # ==============================================================================
 # STUDIO POLISH DIRECTOR (SPD) RUNTIME THEME, SHADER & GAME-FEEL ENGINE (V3.0)
 # - Verified Godot 4.7.2 GDScript syntax (lowercase .lerp() and .position).
@@ -76,6 +78,7 @@ func create_glossy_bubble_or_car_material(base_color: Color, crack_ratio: float 
 
 func spawn_pop_particles(parent: Node3D, world_pos: Vector3, color: Color) -> void:
 	var p := CPUParticles3D.new()
+	_qa_particles.append(p)
 	p.position = world_pos
 	p.emitting = true
 	p.one_shot = true
@@ -99,7 +102,15 @@ func spawn_pop_particles(parent: Node3D, world_pos: Vector3, color: Color) -> vo
 	get_tree().create_timer(0.6).timeout.connect(func():
 		if is_instance_valid(p):
 			p.queue_free()
+		_qa_particles.erase(p)
 	)
+
+func cleanup_qa_runtime_objects() -> void:
+	for p in _qa_particles.duplicate():
+		if is_instance_valid(p):
+			p.emitting = false
+			p.queue_free()
+	_qa_particles.clear()
 
 func pulse_camera_feedback(cam: Camera3D, intensity: float = 0.12) -> void:
 	if cam == null or not is_instance_valid(cam):

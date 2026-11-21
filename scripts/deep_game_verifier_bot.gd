@@ -390,4 +390,19 @@ func _finish_suite(tag: String) -> void:
 		if canonical != null:
 			canonical.store_string("\n".join(log_lines))
 			canonical.close()
+	await _cleanup_before_quit()
 	get_tree().quit(0)
+
+func _cleanup_before_quit() -> void:
+	var gm := get_tree().root.get_node_or_null("/root/GameManager")
+	if gm != null and gm.has_method("cleanup_qa_runtime_objects"):
+		gm.call("cleanup_qa_runtime_objects")
+	var vfx := get_tree().root.get_node_or_null("/root/StudioThemeAndVFX")
+	if vfx != null and vfx.has_method("cleanup_qa_runtime_objects"):
+		vfx.call("cleanup_qa_runtime_objects")
+	var audio := get_tree().root.get_node_or_null("/root/AudioDirector")
+	if audio != null and audio.has_method("cleanup_qa_runtime_objects"):
+		audio.call("cleanup_qa_runtime_objects")
+	# queue_free is deferred; give SceneTree two frames to flush ObjectDB nodes.
+	await get_tree().process_frame
+	await get_tree().process_frame
