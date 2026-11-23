@@ -77,16 +77,17 @@ def encrypt_keystore_file(ks_plain: Path, ks_enc: Path, password: str) -> None:
 
 
 def decrypt_keystore_file(ks_enc: Path, ks_plain: Path, password: str) -> None:
-    subprocess.run(
+    result = subprocess.run(
         [
             "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "100000",
             "-in", str(ks_enc), "-out", str(ks_plain), "-pass", "stdin",
         ],
         input=password.encode("utf-8"),
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        check=False,
+        capture_output=True,
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"[KEYSTORE_DECRYPT_FAIL] {result.stderr.decode('utf-8', 'replace').strip()[:200]}")
 
 def compute_sha256(file_path: Path) -> str:
     h = hashlib.sha256()
@@ -486,30 +487,39 @@ def init_or_pull(ram_vault: Path) -> None:
     ks_dest = ram_vault / "release.keystore"
     cred_dest = ram_vault / "keystore_meta.json"
 
+    restored = False
     if (ks_enc_src.exists() or ks_src.exists()) and cred_src.exists():
-        if ks_enc_src.exists():
-            ks_pass_dl = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "").strip()
-            if len(ks_pass_dl) < 6:
-                ks_pass_dl = "SkVault_" + hashlib.sha256((hf_token + ":" + game_id).encode("utf-8")).hexdigest()[:16]
-            (ram_vault / "active_ks_pass.txt").write_text(ks_pass_dl, encoding="utf-8")
-            decrypt_keystore_file(ks_enc_src, ks_dest, ks_pass_dl)
-        else:
-            shutil.copy2(ks_src, ks_dest)
-        shutil.copy2(cred_src, cred_dest)
-        meta = json.loads(cred_dest.read_text(encoding="utf-8"))
-        actual_sha256 = compute_sha256(ks_dest)
-        expected_sha256 = meta.get("keystore_sha256", "")
-        if expected_sha256 and actual_sha256 != expected_sha256:
-            raise RuntimeError(
-                f"[FAIL_CLOSED] Keystore SHA-256 mismatch for '{game_id}'! "
-                f"Expected {expected_sha256}, got {actual_sha256}."
-            )
-        if action_mode == "update_existing_game":
-            meta["version_code"] = int(meta.get("version_code", 1)) + 1
-            meta["version_name"] = f"2.0.{meta['version_code']}"
-            cred_dest.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        print(f"[HF-VAULT] Verified existing Release Keystore (SHA256: {actual_sha256[:12]}..., vCode: {meta.get('version_code', 1)}).")
-    else:
+        try:
+            if ks_enc_src.exists():
+                ks_pass_dl = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "").strip()
+                if len(ks_pass_dl) < 6:
+                    ks_pass_dl = "SkVault_" + hashlib.sha256((hf_token + ":" + game_id).encode("utf-8")).hexdigest()[:16]
+                (ram_vault / "active_ks_pass.txt").write_text(ks_pass_dl, encoding="utf-8")
+                decrypt_keystore_file(ks_enc_src, ks_dest, ks_pass_dl)
+            else:
+                shutil.copy2(ks_src, ks_dest)
+            shutil.copy2(cred_src, cred_dest)
+            meta = json.loads(cred_dest.read_text(encoding="utf-8"))
+            actual_sha256 = compute_sha256(ks_dest)
+            expected_sha256 = meta.get("keystore_sha256", "")
+            if expected_sha256 and actual_sha256 != expected_sha256:
+                raise RuntimeError(
+                    f"[FAIL_CLOSED] Keystore SHA-256 mismatch for '{game_id}'! "
+                    f"Expected {expected_sha256}, got {actual_sha256}."
+                )
+            if action_mode == "update_existing_game":
+                meta["version_code"] = int(meta.get("version_code", 1)) + 1
+                meta["version_name"] = f"2.0.{meta['version_code']}"
+                cred_dest.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+            restored = True
+            print(f"[HF-VAULT] Verified existing Release Keystore (SHA256: {actual_sha256[:12]}..., vCode: {meta.get('version_code', 1)}).")
+        except Exception as exc:
+            if action_mode in ("update_existing_game", "export_only_apk_and_aab"):
+                raise
+            print(f"[HF-VAULT] Existing keystore for new_game '{game_id}' is unusable ({exc}); generating a fresh keystore.")
+            for stale in (ks_dest, cred_dest, ram_vault / "active_ks_pass.txt"):
+                stale.unlink(missing_ok=True)
+    if not restored:
         ks_pass = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "").strip()
         if len(ks_pass) < 6:
             ks_pass = "SkVault_" + hashlib.sha256((hf_token + ":" + game_id).encode("utf-8")).hexdigest()[:16]

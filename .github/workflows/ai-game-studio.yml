@@ -151,7 +151,7 @@ jobs:
           timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
           timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
           sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
-          godot --version
+          timeout -k 15s 30s xvfb-run -a -s "-screen 0 720x1280x24" godot --version
 
       - name: Pull Stage 1 blueprints and initialize vault
         timeout-minutes: 5
@@ -267,7 +267,7 @@ jobs:
           timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
           timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
           sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
-          godot --version
+          timeout -k 15s 30s xvfb-run -a -s "-screen 0 720x1280x24" godot --version
 
           timeout -k 15s 300s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_export_templates.tpz" -O /tmp/templates.tpz
           timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_source.zip > /tmp/android_source.zip'
