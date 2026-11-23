@@ -114,6 +114,8 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -172,7 +174,7 @@ jobs:
           rm -rf build android assets/custom
           rm -f project.godot main.tscn export_presets.cfg scripts/game_manager.gd scripts/board_view.gd \
             scripts/ui_controller.gd scripts/main_scene.gd scripts/app_config.gd \
-            scripts/procedural_3d_factory.gd scripts/procedural_polish_theme_and_vfx.gd \
+            scripts/procedural_polish_theme_and_vfx.gd \
             scenes/ui_root.tscn scenes/qa_bootstrap.tscn
 
       - name: Generate 100% original clean-room game (deterministic factory)
@@ -315,7 +317,7 @@ jobs:
           rm -rf docs assets/custom
           rm -f project.godot main.tscn export_presets.cfg scripts/game_manager.gd scripts/board_view.gd \
             scripts/ui_controller.gd scripts/main_scene.gd scripts/app_config.gd \
-            scripts/procedural_3d_factory.gd scripts/procedural_polish_theme_and_vfx.gd \
+            scripts/procedural_polish_theme_and_vfx.gd \
             scenes/ui_root.tscn scenes/qa_bootstrap.tscn
           mkdir -p /dev/shm/private_studio_vault /tmp/qa_videos docs
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
