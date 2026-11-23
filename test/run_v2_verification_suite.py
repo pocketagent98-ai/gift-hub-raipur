@@ -84,9 +84,13 @@ def verify_gdscript_and_tscn_syntax() -> list:
         results.append(f"PASS: GDScript syntax & string balance verified for {gd_file} ({len(lines)} lines)")
 
     tscn = Path("main.tscn").read_text(encoding="utf-8")
-    if "[gd_scene" not in tscn or '[node name="StudioUI"' not in tscn:
-        raise AssertionError("main.tscn missing required root or StudioUI nodes")
-    results.append("PASS: main.tscn scene structure verified")
+    ui_root_path = Path("scenes/ui_root.tscn")
+    ui_root = ui_root_path.read_text(encoding="utf-8") if ui_root_path.exists() else ""
+    if "[gd_scene" not in tscn:
+        raise AssertionError("main.tscn missing [gd_scene] header")
+    if '[node name="StudioUI"' not in tscn and '[node name="StudioUI"' not in ui_root:
+        raise AssertionError("Neither main.tscn nor scenes/ui_root.tscn defines the StudioUI node")
+    results.append("PASS: main.tscn + UI root scene structure verified")
     return results
 
 

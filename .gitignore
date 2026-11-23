@@ -1,0 +1,12 @@
+.godot/
+build/
+android/
+.migration_vault/
+__pycache__/
+*.pyc
+*.bak
+dev/
+tmp/
+docs/user_research/
+docs/PREFLIGHT_API_PROBE.json
+docs/STAGE_CLEANUP_REPORT.json

@@ -54,7 +54,7 @@ func _ready() -> void:
 	log_lines.append("[DEEP_VERIFIER_V5] QA Mode Active | Suite: " + suite_mode)
 
 func _process(_delta: float) -> void:
-	if qa_mode_enabled and not suite_finished and Time.get_ticks_msec() - wall_start_msec >= 12000:
+	if qa_mode_enabled and not suite_finished and Engine.get_process_frames() >= 140:
 		log_lines.append("[WATCHDOG] Suite hard timeout reached; completing with bounded evidence.")
 		_finish_suite(suite_mode)
 
@@ -62,7 +62,7 @@ func _physics_process(delta: float) -> void:
 	if not qa_mode_enabled:
 		return
 
-	elapsed += delta
+	elapsed = float(Engine.get_process_frames()) / 15.0
 	var is_software_ci: bool = OS.has_environment("LIBGL_ALWAYS_SOFTWARE") or OS.has_environment("CI")
 	var frame_ms: float = delta * 1000.0
 	if frame_ms > max_frame_delta_ms and elapsed > 2.0:
@@ -123,14 +123,14 @@ func _run_unrushed_ui_shop_and_lifecycle(root: Node, t: float) -> void:
 		lifecycle_tested = true
 		_verify_android_lifecycle_save_and_offline(root)
 
-	if int(t) in [3, 5, 8, 11, 14, 17, 20, 22] and fmod(t, 1.0) < 0.05:
+	if int(t) in [2, 4, 6, 8] and fmod(t, 1.0) < 0.05:
 		_simulate_screen_touch_on_next_button(root, t)
 
 	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "ui_shop")
 
-	if t >= 10.0:
+	if t >= 9.0:
 		_finish_suite("ui_shop")
 
 func _verify_ui_safe_area_and_touch_targets(root: Node, res: Vector2i) -> void:
@@ -192,13 +192,14 @@ func _simulate_screen_touch_on_next_button(root: Node, t: float) -> void:
 			touch.pressed = true
 			Input.parse_input_event(touch)
 			btn.emit_signal("pressed")
-			touch.pressed = false
-			Input.parse_input_event(touch)
+			var release := touch.duplicate() as InputEventScreenTouch
+			release.pressed = false
+			Input.parse_input_event(release)
 			log_lines.append("[TOUCH_EVENT %.1fs] Tapped Button '%s' at %s" % [t, btn.name, str(center)])
 			break
 
 func _run_multi_hit_mechanics_verification(root: Node, t: float) -> void:
-	if int(t) in [2, 5, 8] and fmod(t, 1.0) < 0.05:
+	if int(t) in [1, 3, 5, 7] and fmod(t, 1.0) < 0.05:
 		var gm := root.get_node_or_null("/root/GameManager")
 		if gm != null and gm.has_method("step_mechanics_lab_test"):
 			var msg: String = gm.call("step_mechanics_lab_test")
@@ -206,12 +207,12 @@ func _run_multi_hit_mechanics_verification(root: Node, t: float) -> void:
 	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "mechanics_lab")
-	if t >= 10.0:
+	if t >= 9.0:
 		_finish_suite("mechanics_lab")
 
 func _run_4_distinct_complete_levels(root: Node, t: float) -> void:
 	var target_levels := [1, 3, 6, 8, 10, 16, 30]
-	var slot: int = int(t / 4.0)
+	var slot: int = int(t / 1.25)
 	if slot < target_levels.size() and slot != current_step_idx:
 		current_step_idx = slot
 		var lvl_num: int = target_levels[slot]
@@ -223,12 +224,12 @@ func _run_4_distinct_complete_levels(root: Node, t: float) -> void:
 	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "multi_levels")
-	if t >= 10.0:
+	if t >= 9.0:
 		_finish_suite("multi_levels")
 
 func _run_endless_chunk_and_seam_verification(root: Node, t: float) -> void:
 	if t < 6.0:
-		var chunk_idx: int = int(t / 4.0) + 1
+		var chunk_idx: int = int(t / 1.0) + 1
 		if chunk_idx != current_step_idx:
 			current_step_idx = chunk_idx
 			log_lines.append("=== PHASE A: Testing Individual Endless Map Chunk #%d ===" % chunk_idx)
@@ -244,7 +245,7 @@ func _run_endless_chunk_and_seam_verification(root: Node, t: float) -> void:
 	if t >= 8.0 and not four_angles_captured:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "endless_chunks")
-	if t >= 10.0:
+	if t >= 9.0:
 		_finish_suite("endless_chunks")
 
 func _run_save_ads_and_edge_verification(root: Node, t: float) -> void:
@@ -266,7 +267,7 @@ func _run_save_ads_and_edge_verification(root: Node, t: float) -> void:
 		four_angles_captured = true
 		_capture_4_angles_sync(root, "save_ads_and_edge")
 
-	if t >= 10.0:
+	if t >= 9.0:
 		_finish_suite("save_ads_and_edge")
 
 func _check_memory_and_orphans() -> void:
@@ -309,6 +310,8 @@ func _play_active_scene_intelligently(root: Node, t: float) -> void:
 	for n in root.find_children("*", "Node", true, false):
 		if n.has_method("bot_play_step") and fmod(t, 0.5) < 0.04:
 			n.call("bot_play_step")
+			if n.has_method("get_snapshot"):
+				log_lines.append("[BOT_PLAY %.1fs] %s" % [t, str(n.call("get_snapshot"))])
 
 func _verify_ground_and_seam_continuity(body: Node3D) -> void:
 	var space := body.get_world_3d().direct_space_state

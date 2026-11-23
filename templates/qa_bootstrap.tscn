@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c9qaboot0001"]
+
+[ext_resource type="Script" path="res://scripts/qa_bootstrap.gd" id="1_qaboot"]
+
+[node name="QABootstrap" type="Node"]
+script = ExtResource("1_qaboot")

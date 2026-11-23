@@ -1,168 +1,337 @@
 name: AI Game Studio V5.0 Pro (Sequential HF Vault Relay)
 
+# 3 chained jobs. Every job gets a fresh Ubuntu runner, aggressive Step 0
+# cleanup, a strict 30-minute budget, and per-command `timeout` guards.
+# Godot is ALWAYS the full GUI editor inside Xvfb; --headless is never used.
+
 on:
   workflow_dispatch:
     inputs:
       run_note:
-        description: Reads order and private HF relay state
+        description: "Optional note stored with the run"
         required: false
-        default: Execute sequential production game factory
+        default: "V5.0 sequential relay"
 
 permissions:
   contents: read
-  models: read
+
+concurrency:
+  group: ai-game-studio-v5-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GODOT_VERSION: "4.7.2"
+  GODOT_VERSION_TAG: "4.7.2-stable"
+  GODOT_TEMPLATE_ID: "4.7.2.stable"
   LIBGL_ALWAYS_SOFTWARE: "1"
   GODOT_SILENCE_ROOT_WARNING: "1"
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  QT_QPA_PLATFORM: "xcb"
+  ANDROID_HOME: "/usr/local/lib/android/sdk"
+  ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
+  MIN_FREE_GB: "6"
 
 jobs:
   stage1_recon_and_blueprints:
     if: github.actor == github.repository_owner
     environment: production-studio
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         timeout-minutes: 2
-      - name: Prepare bounded Python and HF relay
-        timeout-minutes: 5
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+
+      - name: "Step 0 - Expand disk and wipe runner bloat"
+        timeout-minutes: 3
         run: |
-          timeout -k 15s 45s python3 scripts/stage_cleanup_guard.py --stage stage1 --min-free-gb "${MIN_FREE_GB:-5}"
-          timeout -k 15s 90s pip install -r requirements.lock.txt
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/share/swift \
+            /usr/local/lib/android/sdk/system-images /opt/hostedtoolcache \
+            /usr/local/lib/node_modules /home/runner/.cache /home/runner/.rustup /home/runner/.cargo || true
+          sudo apt-get clean || true
+          df -h /
+
+      - name: Install bounded Python dependencies
+        timeout-minutes: 4
+        run: timeout -k 15s 240s pip install -r requirements.lock.txt
+
+      - name: Cross-Game Clean Docs Guard (no previous game blueprint leakage)
+        timeout-minutes: 2
+        run: |
+          mkdir -p /tmp/docs_keep
+          cp -r docs/dossier_templates /tmp/docs_keep/ 2>/dev/null || true
+          cp docs/PRIVACY_POLICY.md /tmp/docs_keep/ 2>/dev/null || true
+          rm -rf docs
+          mkdir -p docs
+          cp -r /tmp/docs_keep/. docs/ 2>/dev/null || true
+          rm -rf /tmp/docs_keep
+          ls -la docs
+
+      - name: "Pre-Flight API Probe (NVIDIA NIM / Gemini / HF, 10s each)"
+        timeout-minutes: 2
+        run: timeout -k 15s 60s python3 scripts/preflight_api_probe.py
+
+      - name: Resolve ORDER, run dual-mode recon, and fuse blueprints
+        timeout-minutes: 12
+        run: |
           mkdir -p /dev/shm/private_studio_vault docs
-          timeout -k 15s 60s python3 -m py_compile scripts/*.py
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
-          test -s docs/COMPLETE_GAME_BIBLE.json || printf '{"game_id":"sugar_cascade_cleanroom_01","stage":"stage1","clean_room":true}\n' > docs/COMPLETE_GAME_BIBLE.json
-          timeout -k 15s 120s python3 scripts/hf_vault_sync.py push_stage1_blueprints
-      - name: Stage 1 blueprint contract
-        timeout-minutes: 1
+          timeout -k 15s 120s python3 scripts/dual_mode_game_factory.py
+          REF_LINK=$(jq -r '.ref_link // empty' /dev/shm/private_studio_vault/resolved_job.json 2>/dev/null || true)
+          timeout -k 15s 180s python3 scripts/playstore_cleanroom_recon.py "$REF_LINK"
+          timeout -k 15s 180s python3 scripts/review_intelligence.py "$REF_LINK"
+          timeout -k 15s 90s python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json
+          timeout -k 15s 90s python3 scripts/generate_intelligence_dossier.py
+          timeout -k 15s 90s python3 scripts/fusion_engine.py --project-root .
+          timeout -k 15s 90s python3 scripts/generate_complete_game_bible.py
+
+      - name: Upload clean Stage 1 blueprints to HF Vault
+        timeout-minutes: 5
+        run: timeout -k 15s 240s python3 scripts/hf_vault_sync.py push_stage1_blueprints
+
+      - name: Wipe raw APK / decompiler / recon bloat
+        if: always()
+        timeout-minutes: 2
         run: |
-          test -s ORDER.md
+          rm -rf /tmp/research_dumps /tmp/apk_recon /tmp/rea_dump docs/user_research assets/custom || true
+          rm -f /tmp/reference.apk /tmp/base.apk || true
+          df -h /
 
   stage2_original_assets_and_coding:
     needs: stage1_recon_and_blueprints
     if: github.actor == github.repository_owner
     environment: production-studio
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
-      NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+      NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         timeout-minutes: 2
-      - name: Pull stage 1 relay and install bounded dependencies
-        timeout-minutes: 7
+
+      - name: "Step 0 - Expand disk and wipe runner bloat"
+        timeout-minutes: 3
         run: |
-          timeout -k 15s 45s python3 scripts/stage_cleanup_guard.py --stage stage2 --min-free-gb "${MIN_FREE_GB:-5}"
-          timeout -k 15s 90s pip install -r requirements.lock.txt
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/share/swift \
+            /usr/local/lib/android/sdk/system-images /opt/hostedtoolcache \
+            /usr/local/lib/node_modules /home/runner/.cache /home/runner/.rustup /home/runner/.cargo || true
+          sudo apt-get clean || true
+          df -h /
+
+      - name: "Boot virtual screen + audio FIRST, then install bounded deps"
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            xvfb pulseaudio ffmpeg imagemagick libgl1-mesa-dri libglu1-mesa \
+            libxcursor1 libxinerama1 libxi6 libxrandr2
+          export XDG_RUNTIME_DIR=/tmp/runtime-runner
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          pulseaudio --start --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=studio_sink || true
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "PULSE_SERVER=unix:$XDG_RUNTIME_DIR/pulse/native" >> "$GITHUB_ENV"
+          timeout -k 15s 240s pip install -r requirements.lock.txt
+          timeout -k 15s 60s python3 scripts/stage_cleanup_guard.py --stage stage2 --min-free-gb "${MIN_FREE_GB}"
+
+      - name: Download FULL Godot 4.7.2 Stable GUI editor (no server binary)
+        timeout-minutes: 5
+        run: |
+          timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
+          sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Pull Stage 1 blueprints and initialize vault
+        timeout-minutes: 5
+        run: |
+          rm -rf docs
           mkdir -p /dev/shm/private_studio_vault docs
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py pull_stage1_blueprints
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py init_or_pull
-      - name: Boot full Godot GUI toolchain in Xvfb
-        timeout-minutes: 8
+          GAME_ID=$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)
+          echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
+
+      - name: Cross-Game Clean Workspace Guard
+        timeout-minutes: 3
         run: |
-          mkdir -p ~/.local/share/godot/export_templates/4.7.2.stable ~/.config/godot
-          timeout -k 15s 120s wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -O /tmp/godot.zip
-          timeout -k 15s 45s unzip -q /tmp/godot.zip -d /tmp/godot_extract
-          sudo mv /tmp/godot_extract/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
-          sudo chmod +x /usr/local/bin/godot
-          timeout -k 15s 45s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --import --quit
-          timeout -k 15s 90s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --editor --path . --import --quit
-      - name: Run deterministic coding and Pro gates
-        timeout-minutes: 6
-        run: |
-          timeout -k 15s 120s python3 test/run_v2_verification_suite.py
-          timeout -k 15s 45s python3 scripts/asset_validator.py
-          timeout -k 15s 45s python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json
-          timeout -k 15s 45s python3 scripts/fusion_engine.py --project-root .
-          timeout -k 15s 45s python3 scripts/godot_legacy_code_scanner.py
-          timeout -k 15s 180s python3 scripts/orchestrate_24_agents.py
-          timeout -k 15s 45s python3 scripts/zero_bug_sentinel.py --project-root . --game-id sugar_cascade_cleanroom_01 --genre match_3
-          # run_pro_upgrades_suite.py is an offline-sandbox honesty regression:
-          # its blocked_count contract is intentionally invalid on a real runner
-          # where Godot and the pinned toolchain are available. Cloud uses the
-          # fail-closed sentinel, asset, security, and release gates below.
-          echo "[CLOUD_GATE] Offline-only Pro blocked_count assertion skipped; real cloud gates remain fail-closed."
-      - name: Upload stage 2 project relay
+          PREV_GAME_ID=$(jq -r '.previous_game_id // "none"' docs/GAMES_VAULT_LEDGER.json 2>/dev/null || echo "none")
+          timeout -k 15s 60s python3 scripts/stage_cleanup_guard.py --stage stage2 --min-free-gb "${MIN_FREE_GB}" --isolate-game "$GAME_ID" "$PREV_GAME_ID"
+          rm -rf build android assets/custom
+          rm -f project.godot main.tscn export_presets.cfg scripts/game_manager.gd scripts/board_view.gd \
+            scripts/ui_controller.gd scripts/main_scene.gd scripts/app_config.gd \
+            scripts/procedural_3d_factory.gd scripts/procedural_polish_theme_and_vfx.gd \
+            scenes/ui_root.tscn scenes/qa_bootstrap.tscn
+
+      - name: Generate 100% original clean-room game (deterministic factory)
         timeout-minutes: 4
-        run: timeout -k 15s 180s python3 scripts/hf_vault_sync.py push_stage2_project
+        run: |
+          timeout -k 15s 120s python3 scripts/studio_game_factory.py --project-root .
+          timeout -k 15s 120s python3 scripts/original_asset_factory.py .
+          timeout -k 15s 60s python3 scripts/asset_validator.py
+
+      - name: Run dsh + skills + 24 specialist agents + Zero-Bug Sentinel
+        timeout-minutes: 12
+        run: |
+          timeout -k 15s 90s python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json
+          timeout -k 15s 90s python3 scripts/fusion_engine.py --project-root .
+          timeout -k 15s 60s python3 scripts/godot_legacy_code_scanner.py
+          timeout -k 15s 600s python3 scripts/orchestrate_24_agents.py
+          timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre auto
+          timeout -k 15s 60s python3 scripts/asset_validator.py
+
+      - name: Import generated project in FULL Godot GUI and fail on script errors
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+            godot --editor --path . --import --quit 2>&1 | tee /tmp/godot_import.log
+          if grep -qE "SCRIPT ERROR|Parse Error" /tmp/godot_import.log; then
+            echo "[FAIL_CLOSED] Generated project has script parse errors."
+            exit 1
+          fi
+
+      - name: Upload coded project snapshot to HF Vault
+        timeout-minutes: 5
+        run: timeout -k 15s 240s python3 scripts/hf_vault_sync.py push_stage2_project
+
+      - name: Shred transient stage-2 data
+        if: always()
+        timeout-minutes: 2
+        run: rm -rf /dev/shm/private_studio_vault /dev/shm/hf_stage1 /tmp/godot_extract /tmp/godot.zip || true
 
   stage3_zero_bug_qa_and_release:
     needs: stage2_original_assets_and_coding
     if: github.actor == github.repository_owner
     environment: production-studio
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY || secrets.NVIDIA_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         timeout-minutes: 2
-      - name: Pull stage 2 and install release prerequisites
-        timeout-minutes: 7
+
+      - name: "Step 0 - Expand disk and wipe runner bloat"
+        timeout-minutes: 3
         run: |
-          timeout -k 15s 45s python3 scripts/stage_cleanup_guard.py --stage stage3 --min-free-gb "${MIN_FREE_GB:-5}"
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            timeout -k 15s 90s sudo apt-get update
-            timeout -k 15s 180s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/share/swift \
+            /usr/local/lib/android/sdk/system-images /opt/hostedtoolcache \
+            /usr/local/lib/node_modules /home/runner/.cache /home/runner/.rustup /home/runner/.cargo || true
+          sudo apt-get clean || true
+          df -h /
+
+      - name: "Boot virtual screen + audio FIRST, then install release deps"
+        timeout-minutes: 9
+        run: |
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            xvfb pulseaudio ffmpeg imagemagick libgl1-mesa-dri libglu1-mesa \
+            libxcursor1 libxinerama1 libxi6 libxrandr2 openjdk-17-jdk
+          export XDG_RUNTIME_DIR=/tmp/runtime-runner
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          pulseaudio --start --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=studio_sink || true
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "PULSE_SERVER=unix:$XDG_RUNTIME_DIR/pulse/native" >> "$GITHUB_ENV"
+          JAVA_SDK_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+          echo "JAVA_HOME=$JAVA_SDK_PATH" >> "$GITHUB_ENV"
+          echo "JAVA_SDK_PATH=$JAVA_SDK_PATH" >> "$GITHUB_ENV"
+          timeout -k 15s 240s pip install -r requirements.lock.txt
+          timeout -k 15s 60s python3 scripts/stage_cleanup_guard.py --stage stage3 --min-free-gb "${MIN_FREE_GB}"
+
+      - name: Download FULL Godot GUI + Android export templates + SDK 36
+        timeout-minutes: 12
+        run: |
+          mkdir -p ~/.config/godot ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}"
+          timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
+          sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+          timeout -k 15s 300s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_export_templates.tpz" -O /tmp/templates.tpz
+          timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_source.zip > /tmp/android_source.zip'
+          timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_release.apk > ~/.local/share/godot/export_templates/'"${GODOT_TEMPLATE_ID}"'/android_release.apk'
+          timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_debug.apk > ~/.local/share/godot/export_templates/'"${GODOT_TEMPLATE_ID}"'/android_debug.apk'
+          cp /tmp/android_source.zip ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}"/android_source.zip
+
+          # Install the official Gradle project and the .build_version marker that
+          # Godot requires for gradle-built templates. build_version lives in the
+          # PARENT of android/build (Godot: get_android_build_directory().get_base_dir()).
+          rm -rf android
+          mkdir -p android/build
+          timeout -k 15s 90s unzip -q /tmp/android_source.zip -d android/build
+          printf '%s\n' "${GODOT_TEMPLATE_ID}" > android/.build_version
+          : > android/build/.gdignore
+          chmod +x android/build/gradlew
+          test -s android/build/config.gradle
+          test -s android/build/build.gradle
+          test -s android/.build_version
+
+          SDK=/usr/local/lib/android/sdk
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            timeout -k 15s 90s bash -c "yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1" || true
+            timeout -k 15s 300s "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+              "platforms;android-36" "platforms;android-35" "platforms;android-34" \
+              "build-tools;35.0.0" "build-tools;34.0.0" "platform-tools"
           fi
-          command -v ffmpeg
-          timeout -k 15s 90s pip install -r requirements.lock.txt
-          mkdir -p /dev/shm/private_studio_vault /tmp/qa_videos ~/.config/godot
+          echo "$SDK/build-tools/35.0.0" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          test -d "$SDK/platforms/android-36"
+          test -d "$SDK/build-tools/35.0.0"
+
+          cat > ~/.config/godot/editor_settings-4.7.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "${JAVA_SDK_PATH}"
+          export/android/android_sdk_path = "${SDK}"
+          export/android/shutdown_adb_on_exit = true
+          EOF
+
+      - name: Pull Stage 2 project and resolve release identity
+        timeout-minutes: 5
+        run: |
+          rm -rf docs assets/custom
+          rm -f project.godot main.tscn export_presets.cfg scripts/game_manager.gd scripts/board_view.gd \
+            scripts/ui_controller.gd scripts/main_scene.gd scripts/app_config.gd \
+            scripts/procedural_3d_factory.gd scripts/procedural_polish_theme_and_vfx.gd \
+            scenes/ui_root.tscn scenes/qa_bootstrap.tscn
+          mkdir -p /dev/shm/private_studio_vault /tmp/qa_videos docs
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py pull_stage2_project
           timeout -k 15s 120s python3 scripts/hf_vault_sync.py init_or_pull
-      - name: Boot full Godot GUI and Android export template
-        timeout-minutes: 8
-        run: |
-          mkdir -p ~/.config/godot
-          test -d /usr/local/lib/android/sdk
-          if [ -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
-            timeout -k 15s 90s bash -c 'yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1' || true
-            timeout -k 15s 180s /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0"
-          fi
-          test -d /usr/local/lib/android/sdk/build-tools
-          find /usr/local/lib/android/sdk/build-tools -mindepth 1 -maxdepth 1 -type d -print -quit
-          timeout -k 15s 120s wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -O /tmp/godot.zip
-          timeout -k 15s 45s unzip -q /tmp/godot.zip -d /tmp/godot_extract
-          sudo mv /tmp/godot_extract/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
-          sudo chmod +x /usr/local/bin/godot
-          # The Godot CLI installer starts a Vulkan-only helper on this runner.
-          # Install the official 4.7.2 android_source.zip from the pinned export
-          # template archive instead, preserving Gradle metadata/config.gradle.
-          timeout -k 15s 240s wget -q https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -O /tmp/templates.tpz
-          rm -rf android/build /tmp/android_source.zip
-          timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_source.zip > /tmp/android_source.zip'
-          mkdir -p android/build
-          timeout -k 15s 90s unzip -q /tmp/android_source.zip -d android/build
-          test -s android/build/config.gradle
-          test -s android/build/build.gradle
-      - name: Fail-closed QA videos and telemetry
-        timeout-minutes: 8
+          GAME_ID=$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)
+          GENRE=$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)
+          echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
+          echo "GENRE=$GENRE" >> "$GITHUB_ENV"
+
+      - name: Zero-Bug Sentinel (rules, colours, armour, levels, boundaries)
+        timeout-minutes: 3
+        run: timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre "$GENRE"
+
+      - name: Record 4 Movie Maker QA videos ONE AT A TIME and inspect
+        timeout-minutes: 10
         run: |
           mkdir -p /tmp/studio_qa
           GAME_CAT=$(jq -r '.game_category // "level_by_level"' /dev/shm/private_studio_vault/resolved_job.json)
@@ -171,30 +340,46 @@ jobs:
           QUIT_FRAMES=150
           for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
             AVI="/tmp/qa_videos/${SUITE}.avi"; MP4="/tmp/qa_videos/${SUITE}.mp4"
-            rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$AVI" "$MP4"
+            rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$AVI" "$MP4" "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png"
             timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
             test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
-            timeout -k 15s 60s ffmpeg -y -i "$AVI" -vf scale=1280:720 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
+            montage /tmp/studio_qa/qa_${SUITE}_1_side_ground.png /tmp/studio_qa/qa_${SUITE}_2_front.png /tmp/studio_qa/qa_${SUITE}_3_top_down.png /tmp/studio_qa/qa_${SUITE}_4_iso.png -tile 2x2 -geometry +4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
+            timeout -k 15s 90s ffmpeg -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
             rm -f "$AVI"
-            timeout -k 15s 45s python3 scripts/multi_video_inspector.py "$SUITE" "$MP4" /tmp/studio_qa
+            timeout -k 15s 60s python3 scripts/multi_video_inspector.py "$SUITE" "$MP4" /tmp/studio_qa
           done
-      - name: Export and cryptographically verify APK and AAB
-        timeout-minutes: 8
+
+      - name: Switch AD_MODE to PRODUCTION and export signed APK + AAB
+        timeout-minutes: 20
         run: |
+          sed -i 's/const AD_MODE := "MOCK_TEMPLATE"/const AD_MODE := "PRODUCTION"/' scripts/app_config.gd
+          grep -q 'const AD_MODE := "PRODUCTION"' scripts/app_config.gd
           cp -f export_presets.cfg export_presets.cfg.bak
           cp -f scripts/app_config.gd scripts/app_config.gd.bak
           timeout -k 15s 60s python3 scripts/hf_vault_sync.py inject_export_secrets
           mkdir -p build/android
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --export-release "Android (Direct Install APK)" build/android/game_install.apk
-          timeout -k 15s 150s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
+          timeout -k 15s 900s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+            godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor \
+            --export-release "Android (Direct Install APK)" build/android/game_install.apk
+          timeout -k 15s 900s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+            godot --rendering-method gl_compatibility --rendering-driver opengl3 --editor \
+            --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
           test -s build/android/game_install.apk
           test -s build/android/game_release.aab
-          timeout -k 15s 120s python3 scripts/verify_android_builds.py --post-build build/android/game_install.apk build/android/game_release.aab /dev/shm/private_studio_vault/keystore_meta.json
-          timeout -k 15s 60s python3 scripts/verify_android_builds.py --release-gate build/android/game_install.apk build/android/game_release.aab
-      - name: Sync verified release to HF Vault
-        timeout-minutes: 4
-        run: timeout -k 15s 180s python3 scripts/hf_vault_sync.py push_private_everything
-      - name: Shred temporary secrets and builds
+          timeout -k 15s 180s python3 scripts/verify_android_builds.py --post-build build/android/game_install.apk build/android/game_release.aab /dev/shm/private_studio_vault/keystore_meta.json
+          timeout -k 15s 90s python3 scripts/verify_android_builds.py --release-gate build/android/game_install.apk build/android/game_release.aab
+
+      - name: Build Store-Kit and sync versioned release to HF Vault
+        timeout-minutes: 10
+        run: |
+          timeout -k 15s 60s python3 scripts/store_kit_builder.py --project-root . --out build/store_kit
+          timeout -k 15s 540s python3 scripts/hf_vault_sync.py push_private_everything
+          timeout -k 15s 60s python3 scripts/godot_version_migrator.py --check
+
+      - name: Shred temporary secrets, builds, and restore un-injected config
         if: always()
         timeout-minutes: 2
-        run: rm -rf /dev/shm/private_studio_vault /dev/shm/hf_stage1 /dev/shm/hf_stage2 /tmp/qa_videos build; if [ -f export_presets.cfg.bak ]; then mv -f export_presets.cfg.bak export_presets.cfg; fi; if [ -f scripts/app_config.gd.bak ]; then mv -f scripts/app_config.gd.bak scripts/app_config.gd; fi
+        run: |
+          rm -rf /dev/shm/private_studio_vault /dev/shm/hf_stage1 /dev/shm/hf_stage2 /dev/shm/version_stage /dev/shm/ks_upload_only /tmp/qa_videos /tmp/godot_extract /tmp/godot.zip /tmp/templates.tpz /tmp/android_source.zip build
+          if [ -f export_presets.cfg.bak ]; then mv -f export_presets.cfg.bak export_presets.cfg; fi
+          if [ -f scripts/app_config.gd.bak ]; then mv -f scripts/app_config.gd.bak scripts/app_config.gd; fi

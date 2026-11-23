@@ -1,0 +1,23 @@
+extends Node
+
+const GAME_ID := "__GAME_ID__"
+const GAME_TITLE := "__GAME_TITLE__"
+const GAME_GENRE := "__GENRE__"
+const GAME_VERSION := "__GAME_VERSION__"
+const GAME_CATEGORY := "__CATEGORY__"
+const TARGET_SDK := 36
+const MIN_SDK := 24
+const SCREEN_W := 720
+const SCREEN_H := 1280
+
+# QA builds render simulated ad overlays only. The release workflow switches
+# this to PRODUCTION after the Zero-Bug Sentinel and video QA gates pass.
+const AD_MODE := "MOCK_TEMPLATE"
+
+const PUBLIC_CLIENT_CONFIG: Dictionary = {}
+
+func is_production_ads() -> bool:
+	return AD_MODE == "PRODUCTION"
+
+func get_client_id(key: String, fallback: String = "") -> String:
+	return str(PUBLIC_CLIENT_CONFIG.get(key, fallback))

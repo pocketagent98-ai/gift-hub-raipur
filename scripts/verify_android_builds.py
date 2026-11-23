@@ -41,9 +41,15 @@ def sha256_file(path: Path) -> str:
 
 
 def parse_manifest_mf_sha256_digests(manifest_text: str) -> Dict[str, str]:
-    """Parses Name -> SHA-256-Digest (base64) blocks from META-INF/MANIFEST.MF."""
+    """Parses Name -> SHA-256-Digest blocks, unfolding JAR 72-byte continuations."""
     digests: Dict[str, str] = {}
-    blocks = re.split(r"\r?\n\r?\n", manifest_text.strip())
+    unfolded: List[str] = []
+    for line in manifest_text.replace("\r", "").split("\n"):
+        if line.startswith(" ") and unfolded:
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    blocks = re.split(r"\n\n", "\n".join(unfolded).strip())
     for block in blocks:
         name_m = re.search(r"^Name:\s*(.+)$", block, re.M)
         sha_m = re.search(r"^SHA-256-Digest:\s*(.+)$", block, re.M)
@@ -65,7 +71,7 @@ def verify_archive_signature_and_digests(archive_path: Path) -> str:
         if has_manifest_mf:
             manifest_txt = zf.read("META-INF/MANIFEST.MF").decode("utf-8", errors="ignore")
             recorded_digests = parse_manifest_mf_sha256_digests(manifest_txt)
-            payload_files = [n for n in names if not n.startswith("META-INF/") and not n.endswith("/")]
+            payload_files = [n for n in names if not n.startswith("META-INF/") and not n.startswith("BUNDLE-METADATA/") and not n.endswith("/")]
             if not payload_files:
                 raise RuntimeError(f"[CRYPTO_FAIL] {archive_path} contains no payload files!")
             for p_name in payload_files:
@@ -242,7 +248,14 @@ def verify_release_constraints(apk_path: Path, aab_path: Path, max_size_bytes: i
         with zipfile.ZipFile(artifact) as zf:
             names = zf.namelist()
             native = [n for n in names if "lib/arm64-v8a/" in n or "/arm64-v8a/" in n]
-            entry = {"size_bytes": artifact.stat().st_size, "under_80mb": artifact.stat().st_size < max_size_bytes, "arm64_entries": native, "sixteen_kb_alignment": "unverified"}
+            alignment = "unverified"
+            zipalign = shutil.which("zipalign")
+            if zipalign:
+                align_res = subprocess.run([zipalign, "-c", "-P", "16", "4", str(artifact)], capture_output=True, text=True, check=False)
+                alignment = "verified" if align_res.returncode == 0 else "failed"
+                if align_res.returncode != 0:
+                    errors.append(f"{artifact.name}: 16 KB page-size alignment failed ({align_res.stderr.strip()[:120]})")
+            entry = {"size_bytes": artifact.stat().st_size, "under_80mb": artifact.stat().st_size < max_size_bytes, "arm64_entries": native, "sixteen_kb_alignment": alignment}
             if not entry["under_80mb"]: errors.append(f"{artifact.name} exceeds 80 MB")
             if not native: errors.append(f"{artifact.name}: ARM64 (arm64-v8a) evidence unavailable")
             evidence["artifacts"][artifact.name] = entry

@@ -16,6 +16,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import time
 from typing import Dict, Any
 
 GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{3,48}$")
@@ -182,11 +183,13 @@ def parse_and_route_order_inputs(order_txt: str, research_dir: Path, ram_vault: 
     raw_game_id = extract_field("GAME_ID", os.environ.get("INPUT_GAME_ID", "my_studio_game_01"))
     game_id = validate_game_id(raw_game_id)
 
-    raw_mode = extract_field("MODE", os.environ.get("INPUT_ACTION_MODE", "new_game")).lower()
+    raw_mode = extract_field("ACTION_MODE", extract_field("MODE", os.environ.get("INPUT_ACTION_MODE", "new_game"))).lower()
     if "update" in raw_mode:
         action_mode = "update_existing_game"
     elif "export" in raw_mode:
         action_mode = "export_only_apk_and_aab"
+    elif "rollback" in raw_mode:
+        action_mode = "rollback_release"
     else:
         action_mode = "new_game"
 
@@ -367,11 +370,13 @@ def resolve_command(ram_vault: Path) -> None:
     raw_game_id = extract_field("GAME_ID", os.environ.get("INPUT_GAME_ID", "my_studio_game_01"))
     game_id = validate_game_id(raw_game_id)
 
-    raw_mode = extract_field("MODE", os.environ.get("INPUT_ACTION_MODE", "new_game")).lower()
+    raw_mode = extract_field("ACTION_MODE", extract_field("MODE", os.environ.get("INPUT_ACTION_MODE", "new_game"))).lower()
     if "update" in raw_mode:
         action_mode = "update_existing_game"
     elif "export" in raw_mode:
         action_mode = "export_only_apk_and_aab"
+    elif "rollback" in raw_mode:
+        action_mode = "rollback_release"
     else:
         action_mode = "new_game"
 
@@ -448,17 +453,27 @@ def init_or_pull(ram_vault: Path) -> None:
             ) from exc
         print(f"[HF-VAULT] No existing remote vault folder for new_game '{game_id}' ({exc}); initializing fresh vault.")
 
-    proj_src = dl_dir / "GAMES_VAULT" / game_id / "project"
-    ks_enc_src = dl_dir / "GAMES_VAULT" / game_id / "private_secrets" / "release.keystore.enc"
-    ks_src = dl_dir / "GAMES_VAULT" / game_id / "private_secrets" / "release.keystore"
-    cred_src = dl_dir / "GAMES_VAULT" / game_id / "private_secrets" / "keystore_meta.json"
+    vault_root = dl_dir / "GAMES_VAULT" / game_id
+    proj_candidates = [vault_root / "project", vault_root / "latest" / "source"]
+    proj_src = next((p for p in proj_candidates if (p / "project.godot").exists()), proj_candidates[0])
+    ks_candidates = [
+        vault_root / "private_secrets" / "release.keystore.enc",
+        vault_root / "keystore" / "release.keystore.enc",
+    ]
+    ks_enc_src = next((p for p in ks_candidates if p.exists()), ks_candidates[0])
+    ks_src = vault_root / "private_secrets" / "release.keystore"
+    cred_candidates = [
+        vault_root / "private_secrets" / "keystore_meta.json",
+        vault_root / "keystore" / "keystore_meta.json",
+    ]
+    cred_src = next((p for p in cred_candidates if p.exists()), cred_candidates[0])
 
     # RED FLAG 4 FIXED: Fail-Closed in Update/Export modes if project or keystore is missing!
     if action_mode in ("update_existing_game", "export_only_apk_and_aab"):
         if not (proj_src / "project.godot").exists():
             raise FileNotFoundError(
                 f"[FAIL_CLOSED] Mode is '{action_mode}', but no existing Godot project was found at "
-                f"GAMES_VAULT/{game_id}/project/project.godot in '{hf_repo}'. Refusing to overwrite with a blank project!"
+                f"GAMES_VAULT/{game_id}/project|latest/source/project.godot in '{hf_repo}'. Refusing to overwrite with a blank project!"
             )
         if (not ks_enc_src.exists() and not ks_src.exists()) or not cred_src.exists():
             raise FileNotFoundError(
@@ -529,7 +544,7 @@ def init_or_pull(ram_vault: Path) -> None:
             "keystore_sha256": ks_sha256,
             "package_name": f"com.aistudio.{game_id.lower().replace('-', '_')}",
             "version_code": 1,
-            "version_name": "3.0.1",
+            "version_name": (_order_field(Path("ORDER.md").read_text(encoding="utf-8"), "GAME_VERSION", "v1.0.0").lstrip("v") if Path("ORDER.md").exists() else "1.0.0"),
             "encrypted_keystore": True,
         }
         cred_dest.write_text(json.dumps(meta, indent=2), encoding="utf-8")
@@ -588,59 +603,153 @@ def inject_export_config(ram_vault: Path) -> None:
     print("[HF-VAULT] Injected verified signing config and public client IDs.")
 
 
+def _order_field(order_txt: str, key: str, default: str = "") -> str:
+    m = re.search(rf"^{re.escape(key)}[ \t]*:[ \t]*(.*)$", order_txt, re.M | re.I)
+    return m.group(1).strip() if m and m.group(1).strip() else default
+
+
+def _copy_source_snapshot(src_root: Path, dst: Path) -> None:
+    dst.mkdir(parents=True, exist_ok=True)
+    blocked = {".git", ".agents", "build", "android", "__pycache__", ".godot", ".migration_vault", "MY_RESEARCH_AND_FILES", "docs/user_research"}
+    for item in src_root.iterdir():
+        if item.name in blocked or item.name.endswith(".bak"):
+            continue
+        target = dst / item.name
+        if item.is_dir():
+            shutil.copytree(
+                item,
+                target,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.bak", ".godot", "user_research"),
+            )
+        elif item.is_file():
+            shutil.copy2(item, target)
+
+
 def push_private_everything(ram_vault: Path) -> None:
     api, _, _, hf_repo = get_hf_api()
     job_info = json.loads((ram_vault / "resolved_job.json").read_text(encoding="utf-8"))
     game_id = validate_game_id(job_info["game_id"])
+    order_txt = Path("ORDER.md").read_text(encoding="utf-8") if Path("ORDER.md").exists() else ""
+    version_tag = _order_field(order_txt, "GAME_VERSION", "v1.0.0")
+    if not re.fullmatch(r"v?[0-9][0-9A-Za-z._-]{0,31}", version_tag):
+        raise ValueError(f"[SECURITY_BLOCK] Invalid GAME_VERSION: {version_tag}")
+    action_mode = str(job_info.get("action_mode", "new_game"))
+    rollback_target = _order_field(order_txt, "ROLLBACK_VERSION", "")
+
+    meta_path = ram_vault / "keystore_meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    version_code = int(meta.get("version_code", 1))
 
     if Path("export_presets.cfg.bak").exists():
         shutil.copy2("export_presets.cfg.bak", "export_presets.cfg")
     if Path("scripts/app_config.gd.bak").exists():
         shutil.copy2("scripts/app_config.gd.bak", "scripts/app_config.gd")
 
-    # Upload only sanitized keystore files to private_secrets
-    upload_ks = Path("/dev/shm/ks_upload_only")
-    upload_ks.mkdir(parents=True, exist_ok=True)
+    stage = Path("/dev/shm/version_stage")
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True, exist_ok=True)
+
+    _copy_source_snapshot(Path("."), stage / "source")
+
+    bibles = stage / "bibles"
+    bibles.mkdir()
+    docs = Path("docs")
+    if docs.exists():
+        for item in docs.iterdir():
+            if item.is_file() and item.suffix.lower() in (".md", ".json"):
+                shutil.copy2(item, bibles / item.name)
+
+    qa_dir = stage / "qa_videos"
+    qa_dir.mkdir()
+    if Path("/tmp/qa_videos").exists():
+        for item in sorted(Path("/tmp/qa_videos").glob("*.mp4")):
+            shutil.copy2(item, qa_dir / item.name)
+
+    sentinel = stage / "sentinel"
+    sentinel.mkdir()
+    if (docs / "ZERO_BUG_SENTINEL_REPORT.json").exists():
+        shutil.copy2(docs / "ZERO_BUG_SENTINEL_REPORT.json", sentinel / "ZERO_BUG_SENTINEL_REPORT.json")
+
+    artifacts = stage / "artifacts"
+    artifacts.mkdir()
+    apk = Path("build/android/game_install.apk")
+    aab = Path("build/android/game_release.aab")
+    if apk.exists():
+        shutil.copy2(apk, artifacts / apk.name)
+    if aab.exists():
+        shutil.copy2(aab, artifacts / aab.name)
+
+    store_src = Path("build/store_kit")
+    if store_src.exists():
+        shutil.copytree(store_src, stage / "store_kit")
+    else:
+        (stage / "store_kit").mkdir()
+
+    manifest = {
+        "game_id": game_id,
+        "version_tag": version_tag,
+        "version_code": version_code,
+        "action_mode": action_mode,
+        "genre": str(job_info.get("genre", "")),
+        "supports_actions": ["NEW_GAME", "UPDATE_EXISTING", "ROLLBACK"],
+        "rollback_target": rollback_target,
+        "artifacts": {
+            "apk": {"name": apk.name, "sha256": compute_sha256(apk), "size_bytes": apk.stat().st_size} if apk.exists() else None,
+            "aab": {"name": aab.name, "sha256": compute_sha256(aab), "size_bytes": aab.stat().st_size} if aab.exists() else None,
+        },
+        "qa_videos": sorted(p.name for p in qa_dir.glob("*.mp4")),
+        "sentinel_status": json.loads((docs / "ZERO_BUG_SENTINEL_REPORT.json").read_text(encoding="utf-8")).get("status", "UNKNOWN") if (docs / "ZERO_BUG_SENTINEL_REPORT.json").exists() else "UNKNOWN",
+        "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    (stage / "version_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    api.upload_folder(
+        folder_path=str(stage),
+        path_in_repo=f"GAMES_VAULT/{game_id}/versions/{version_tag}",
+        repo_id=hf_repo,
+        repo_type="dataset",
+        commit_message=f"Versioned release {game_id} {version_tag} (code {version_code})",
+    )
+    api.upload_folder(
+        folder_path=str(stage),
+        path_in_repo=f"GAMES_VAULT/{game_id}/latest",
+        repo_id=hf_repo,
+        repo_type="dataset",
+        commit_message=f"Latest release {game_id} {version_tag}",
+    )
+
+    ks_stage = Path("/dev/shm/ks_upload_only")
+    shutil.rmtree(ks_stage, ignore_errors=True)
+    ks_stage.mkdir(parents=True, exist_ok=True)
     ks_pass_up = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "").strip()
     if len(ks_pass_up) < 6 and (ram_vault / "active_ks_pass.txt").exists():
         ks_pass_up = (ram_vault / "active_ks_pass.txt").read_text(encoding="utf-8").strip()
-    if ks_pass_up:
-        encrypt_keystore_file(ram_vault / "release.keystore", upload_ks / "release.keystore.enc", ks_pass_up)
-    shutil.copy2(ram_vault / "keystore_meta.json", upload_ks / "keystore_meta.json")
+    if (ram_vault / "release.keystore").exists() and ks_pass_up:
+        encrypt_keystore_file(ram_vault / "release.keystore", ks_stage / "release.keystore.enc", ks_pass_up)
+    if meta_path.exists():
+        shutil.copy2(meta_path, ks_stage / "keystore_meta.json")
+    for vault_path in (f"GAMES_VAULT/{game_id}/keystore", f"GAMES_VAULT/{game_id}/private_secrets"):
+        api.upload_folder(
+            folder_path=str(ks_stage),
+            path_in_repo=vault_path,
+            repo_id=hf_repo,
+            repo_type="dataset",
+            commit_message=f"Permanent encrypted keystore for {game_id}",
+        )
+
+    meta["version_code"] = int(meta.get("version_code", 1)) + 1
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    shutil.copy2(meta_path, ks_stage / "keystore_meta.json")
     api.upload_folder(
-        folder_path=str(upload_ks),
+        folder_path=str(ks_stage),
         path_in_repo=f"GAMES_VAULT/{game_id}/private_secrets",
         repo_id=hf_repo,
         repo_type="dataset",
-        commit_message=f"Sync keystore metadata for {game_id}",
+        commit_message=f"Advance versionCode for {game_id} to {version_code + 1}",
     )
-    shutil.rmtree(upload_ks, ignore_errors=True)
-
-    api.upload_folder(
-        folder_path=".",
-        path_in_repo=f"GAMES_VAULT/{game_id}/project",
-        repo_id=hf_repo,
-        repo_type="dataset",
-        ignore_patterns=[".git/*", "/tmp/*", "build/*", "__pycache__/*", "*.bak"],
-        commit_message=f"Verified V2.0 Release ({job_info['action_mode']}) for {game_id}",
-    )
-    if Path("build").exists():
-        api.upload_folder(
-            folder_path="build",
-            path_in_repo=f"GAMES_VAULT/{game_id}/builds_apk_and_aab",
-            repo_id=hf_repo,
-            repo_type="dataset",
-            commit_message=f"Verified APK & Play Store AAB for {game_id}",
-        )
-    if Path("/tmp/qa_videos").exists():
-        api.upload_folder(
-            folder_path="/tmp/qa_videos",
-            path_in_repo=f"GAMES_VAULT/{game_id}/qa_videos",
-            repo_id=hf_repo,
-            repo_type="dataset",
-            commit_message=f"QA Videos for {game_id}",
-        )
-    print(f"[HF-VAULT] Synced verified release to https://huggingface.co/datasets/{hf_repo}/tree/main/GAMES_VAULT/{game_id}")
+    shutil.rmtree(stage, ignore_errors=True)
+    shutil.rmtree(ks_stage, ignore_errors=True)
+    print(f"[HF-VAULT] Synced versioned release to https://huggingface.co/datasets/{hf_repo}/tree/main/GAMES_VAULT/{game_id}/versions/{version_tag}")
 
 
 def _relay_job_info(ram_vault: Path) -> tuple[dict, str, Any]:
@@ -684,7 +793,7 @@ def pull_stage1_blueprints(ram_vault: Path) -> None:
 def push_stage2_project(ram_vault: Path) -> None:
     job_info, hf_repo, (api, _, _) = _relay_job_info(ram_vault)
     game_id = validate_game_id(job_info["game_id"])
-    api.upload_folder(folder_path=".", path_in_repo=f"GAMES_VAULT/{game_id}/staging/stage2_project", repo_id=hf_repo, repo_type="dataset", ignore_patterns=[".git/*", "build/*", "/tmp/*", "__pycache__/*", "*.apk", "*.aab"], commit_message=f"Stage 2 project for {game_id}")
+    api.upload_folder(folder_path=".", path_in_repo=f"GAMES_VAULT/{game_id}/staging/stage2_project", repo_id=hf_repo, repo_type="dataset", ignore_patterns=[".git/*", ".agents/*", ".godot/*", "build/*", "android/*", "/tmp/*", "__pycache__/*", ".migration_vault/*", "docs/user_research/*", "MY_RESEARCH_AND_FILES/*", "*.apk", "*.aab", "*.bak"], commit_message=f"Stage 2 project for {game_id}")
     print(f"[HF-VAULT] Uploaded stage2 project relay for {game_id}")
 
 

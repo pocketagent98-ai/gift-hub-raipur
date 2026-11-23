@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "target": "4.8-stable",
+  "production_pin_changed": false,
+  "checks": {
+    "stable_target_only": true,
+    "no_headless_mode": true,
+    "full_gui_in_xvfb": true,
+    "vault_backup_before_migration": true,
+    "zero_bug_sentinel_gate": true,
+    "auto_rollback_to_4_7_2": true
+  },
+  "vault_snapshot": ".migration_vault/pre_godot48/pinned_toolchains_and_checksums.json",
+  "policy": "FULL Godot 4.8 Stable GUI inside xvfb-run -s '-screen 0 720x1280x24'; never --headless"
+}
