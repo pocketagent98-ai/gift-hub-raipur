@@ -13,7 +13,7 @@ on:
         default: "V5.0 sequential relay"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ai-game-studio-v5-${{ github.ref }}
@@ -151,6 +151,9 @@ jobs:
         timeout-minutes: 5
         run: |
           timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          GODOT_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['linux_x86_64_zip'])")
+          echo "${GODOT_SHA}  /tmp/godot.zip" | sha512sum -c -
+          echo "[GODOT_CHECKSUM_OK] Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip"
           timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
           sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
           timeout -k 15s 30s xvfb-run -a -s "-screen 0 720x1280x24" godot --version
@@ -267,11 +270,17 @@ jobs:
         run: |
           mkdir -p ~/.config/godot ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}"
           timeout -k 15s 180s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          GODOT_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['linux_x86_64_zip'])")
+          echo "${GODOT_SHA}  /tmp/godot.zip" | sha512sum -c -
+          echo "[GODOT_CHECKSUM_OK] Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip"
           timeout -k 15s 60s unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
           sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
           timeout -k 15s 30s xvfb-run -a -s "-screen 0 720x1280x24" godot --version
 
           timeout -k 15s 300s wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_export_templates.tpz" -O /tmp/templates.tpz
+          TEMPLATES_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['export_templates_tpz'])")
+          echo "${TEMPLATES_SHA}  /tmp/templates.tpz" | sha512sum -c -
+          echo "[GODOT_TEMPLATES_CHECKSUM_OK] Godot_v${GODOT_VERSION_TAG}_export_templates.tpz"
           timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_source.zip > /tmp/android_source.zip'
           timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_release.apk > ~/.local/share/godot/export_templates/'"${GODOT_TEMPLATE_ID}"'/android_release.apk'
           timeout -k 15s 90s bash -c 'unzip -p /tmp/templates.tpz templates/android_debug.apk > ~/.local/share/godot/export_templates/'"${GODOT_TEMPLATE_ID}"'/android_debug.apk'
@@ -386,6 +395,97 @@ jobs:
           timeout -k 15s 60s python3 scripts/store_kit_builder.py --project-root . --out build/store_kit
           timeout -k 15s 540s python3 scripts/hf_vault_sync.py push_private_everything
           timeout -k 15s 60s python3 scripts/godot_version_migrator.py --check
+
+      - name: Stage release assets (APK, AAB, QA videos, Store-Kit, Sentinel report)
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          mkdir -p build/release_assets
+          cp build/android/game_install.apk build/release_assets/
+          cp build/android/game_release.aab build/release_assets/
+          cp /tmp/qa_videos/*.mp4 build/release_assets/
+          cp build/store_kit/icon_512x512.png build/release_assets/ 2>/dev/null || true
+          cp build/store_kit/feature_graphic_1024x500.png build/release_assets/ 2>/dev/null || true
+          cp docs/ZERO_BUG_SENTINEL_REPORT.json build/release_assets/ 2>/dev/null || true
+          sha256sum build/release_assets/* > build/release_assets/SHA256SUMS.txt
+          ls -lh build/release_assets
+
+      - name: Upload APK/AAB/QA videos as GitHub Actions artifacts (backup)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
+        with:
+          name: ${{ env.GAME_ID }}-${{ github.run_number }}-release
+          path: build/release_assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release with signed APK, AAB, and QA videos
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^GAME_VERSION:\s*(\S+)',t,re.M);print(m.group(1) if m else 'v1.0.0')")
+          TAG="${GAME_ID}-${VERSION}"
+          TITLE="AI Game Studio - ${GAME_ID} ${VERSION}"
+          APK=build/release_assets/game_install.apk
+          AAB=build/release_assets/game_release.aab
+          APK_SIZE=$(stat -c%s "$APK")
+          AAB_SIZE=$(stat -c%s "$AAB")
+          APK_SHA=$(sha256sum "$APK" | awk '{print $1}')
+          AAB_SHA=$(sha256sum "$AAB" | awk '{print $1}')
+          NOTES=$(cat <<EOF
+          ## AI Game Studio V5.0 Pro — ${GAME_ID}
+
+          - **Genre:** ${GENRE}
+          - **Version:** ${VERSION}
+          - **Build:** ${GITHUB_RUN_NUMBER}
+          - **Commit:** ${GITHUB_SHA}
+          - **Workflow run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - **QA:** Zero-Bug Sentinel PASS; 4 Movie Maker QA videos PASS
+          - **Android:** Target SDK 36, Min SDK 24, arm64-v8a, 16 KB page aligned
+
+          ### Direct downloads
+          - \`game_install.apk\` — signed, direct Android install (${APK_SIZE} bytes, SHA-256 \`${APK_SHA}\`)
+          - \`game_release.aab\` — signed, Google Play upload (${AAB_SIZE} bytes, SHA-256 \`${AAB_SHA}\`)
+          - QA videos: \`ui_shop.mp4\`, \`mechanics_lab.mp4\`, \`multi_levels.mp4\` or \`endless_chunks.mp4\`, \`save_ads_and_edge.mp4\`
+
+          Install: \`adb install -r game_install.apk\`
+          EOF
+          )
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/release_assets/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" build/release_assets/* --title "$TITLE" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+          fi
+          echo "RELEASE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify published GitHub Release assets (aapt / apksigner / jarsigner)
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^GAME_VERSION:\s*(\S+)',t,re.M);print(m.group(1) if m else 'v1.0.0')")
+          TAG="${GAME_ID}-${VERSION}"
+          rm -rf /tmp/release_verify
+          mkdir -p /tmp/release_verify
+          for i in 1 2 3 4 5; do
+            if gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir /tmp/release_verify --clobber; then break; fi
+            sleep 3
+          done
+          test -s /tmp/release_verify/game_install.apk
+          test -s /tmp/release_verify/game_release.aab
+          aapt dump badging /tmp/release_verify/game_install.apk > /tmp/release_badging.txt
+          grep -q "targetSdkVersion:'36'" /tmp/release_badging.txt
+          grep -q "sdkVersion:'24'" /tmp/release_badging.txt
+          grep -q "native-code: 'arm64-v8a'" /tmp/release_badging.txt
+          apksigner verify --print-certs /tmp/release_verify/game_install.apk
+          jarsigner -verify -verbose -certs /tmp/release_verify/game_release.aab > /tmp/release_jarsigner.txt
+          grep -q "jar verified" /tmp/release_jarsigner.txt
+          for f in /tmp/release_verify/*.mp4; do test -s "$f"; done
+          echo "[RELEASE_ASSETS_VERIFIED] ${TAG}"
 
       - name: Shred temporary secrets, builds, and restore un-injected config
         if: always()
