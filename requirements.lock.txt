@@ -6,3 +6,4 @@ google-play-scraper==1.2.7
 huggingface_hub==0.34.4
 pypdf==5.4.0
 cryptography==43.0.3
+imageio-ffmpeg==0.5.1

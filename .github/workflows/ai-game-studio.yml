@@ -201,15 +201,10 @@ jobs:
       - name: "Boot virtual screen + audio FIRST, then install bounded deps"
         timeout-minutes: 12
         run: |
-          sudo apt-get update -o Acquire::Retries=5
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb pulseaudio pulseaudio-utils libgl1-mesa-dri libglu1-mesa \
-            libxcursor1 libxinerama1 libxi6 libxrandr2
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
-          fi
-          if ! command -v montage >/dev/null; then
-            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imagemagick
+          timeout -k 15s 240s sudo apt-get install -y --no-install-recommends xvfb || \
+            (timeout -k 15s 180s sudo apt-get update -o Acquire::Retries=3 && timeout -k 15s 240s sudo apt-get install -y --no-install-recommends xvfb)
+          if ! command -v pulseaudio >/dev/null; then
+            timeout -k 15s 240s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils || true
           fi
           export XDG_RUNTIME_DIR=/tmp/runtime-runner
           mkdir -p "$XDG_RUNTIME_DIR"
@@ -376,18 +371,13 @@ jobs:
       - name: "Boot virtual screen + audio FIRST, then install release deps"
         timeout-minutes: 15
         run: |
-          sudo apt-get update -o Acquire::Retries=5
-          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb pulseaudio pulseaudio-utils libgl1-mesa-dri libglu1-mesa \
-            libxcursor1 libxinerama1 libxi6 libxrandr2
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
-          fi
-          if ! command -v montage >/dev/null; then
-            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imagemagick
+          timeout -k 15s 240s sudo apt-get install -y --no-install-recommends xvfb || \
+            (timeout -k 15s 180s sudo apt-get update -o Acquire::Retries=3 && timeout -k 15s 240s sudo apt-get install -y --no-install-recommends xvfb)
+          if ! command -v pulseaudio >/dev/null; then
+            timeout -k 15s 240s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils || true
           fi
           if ! command -v java >/dev/null; then
-            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk
+            timeout -k 15s 300s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk || true
           fi
           export XDG_RUNTIME_DIR=/tmp/runtime-runner
           mkdir -p "$XDG_RUNTIME_DIR"
@@ -512,7 +502,8 @@ jobs:
                 res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
               test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
               montage "/tmp/studio_qa/qa_${SUITE}_1_side_ground.png" "/tmp/studio_qa/qa_${SUITE}_2_front.png" "/tmp/studio_qa/qa_${SUITE}_3_top_down.png" "/tmp/studio_qa/qa_${SUITE}_4_iso.png" -tile 2x2 -geometry +4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
-              timeout -k 15s 90s ffmpeg -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
+              FFMPEG_BIN=$(python3 -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
+              timeout -k 15s 90s "$FFMPEG_BIN" -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
               rm -f "$AVI"
               if ! timeout -k 15s 90s python3 scripts/multi_video_inspector.py "$SUITE" "$MP4" /tmp/studio_qa --project-root .; then
                 VIDEO_FAIL=1

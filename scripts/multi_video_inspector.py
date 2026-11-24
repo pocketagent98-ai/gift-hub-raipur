@@ -14,6 +14,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -44,12 +45,23 @@ def validate_deterministic_telemetry(suite_name: str, telemetry_text: str) -> Li
     return errors
 
 
+def _ffmpeg_exe() -> str:
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg  # type: ignore
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+
 def extract_frames(video_path: Path, suite_name: str, out_dir: Path) -> List[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     frames: List[Path] = []
     for idx, sec in enumerate((1.0, 3.0, 5.0, 7.0, 8.4)):
         out = out_dir / f"frame_{suite_name}_{idx:02d}.jpg"
-        cmd = ["ffmpeg", "-y", "-ss", str(sec), "-i", str(video_path), "-frames:v", "1", "-q:v", "2", str(out)]
+        cmd = [_ffmpeg_exe(), "-y", "-ss", str(sec), "-i", str(video_path), "-frames:v", "1", "-q:v", "2", str(out)]
         try:
             subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
         except Exception:

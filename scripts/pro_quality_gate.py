@@ -170,7 +170,13 @@ def _video_duration(path: Path) -> float:
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
             capture_output=True, text=True, timeout=20, check=False,
         )
-        return float(out.stdout.strip() or 0.0)
+        if out.returncode == 0 and out.stdout.strip():
+            return float(out.stdout.strip())
+    except Exception:
+        pass
+    try:
+        import imageio_ffmpeg  # type: ignore
+        return float(imageio_ffmpeg.count_frames_and_secs(str(path))[1])
     except Exception:
         return 0.0
 
