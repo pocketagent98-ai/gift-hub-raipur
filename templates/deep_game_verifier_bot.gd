@@ -322,6 +322,9 @@ func _run_save_ads_and_edge_verification(root: Node, t: float) -> void:
 			else:
 				log_lines.append("QA_FAIL_OFFLINE_MODE: Monetization offline fallback failed!")
 		var ui := root.get_node_or_null("/root/StudioUI")
+		var gm := root.get_node_or_null("/root/GameManager")
+		if gm != null and gm.has_method("load_level"):
+			gm.call("load_level", 1)
 		if ui != null and ui.has_method("show_screen"):
 			ui.call("show_screen", "WinLoseScreen")
 			log_lines.append("[GAME_OVER_AND_VICTORY_PASS] WinLoseScreen transition & retry state verified.")

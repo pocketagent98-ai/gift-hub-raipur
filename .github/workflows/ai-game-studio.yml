@@ -464,6 +464,17 @@ jobs:
           echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
           echo "GENRE=$GENRE" >> "$GITHUB_ENV"
 
+      - name: Import Stage 2 project assets in FULL Godot GUI (no headless)
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          timeout -k 15s 240s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+            godot --editor --path . --import --quit 2>&1 | tee /tmp/godot_import_stage3.log
+          if grep -qE "SCRIPT ERROR|Parse Error" /tmp/godot_import_stage3.log; then
+            echo "[FAIL_CLOSED] Stage 3 project import has script parse errors."
+            exit 1
+          fi
+
       - name: Zero-Bug Sentinel on live runtime snapshots (anti-stuck / anti-clipping / grounding)
         timeout-minutes: 5
         run: |
@@ -501,7 +512,6 @@ jobs:
                 godot --rendering-method gl_compatibility --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" \
                 res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
               test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
-              montage "/tmp/studio_qa/qa_${SUITE}_1_side_ground.png" "/tmp/studio_qa/qa_${SUITE}_2_front.png" "/tmp/studio_qa/qa_${SUITE}_3_top_down.png" "/tmp/studio_qa/qa_${SUITE}_4_iso.png" -tile 2x2 -geometry +4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
               FFMPEG_BIN=$(python3 -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
               timeout -k 15s 90s "$FFMPEG_BIN" -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
               rm -f "$AVI"
