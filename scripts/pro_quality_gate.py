@@ -58,7 +58,7 @@ def scan_stub_strings(project_root: Path, genre: str) -> List[Dict[str, str]]:
             files.append(p)
     docs = project_root / "docs"
     if docs.exists():
-        files.extend(p for p in docs.glob("*") if p.is_file() and p.suffix.lower() in (".json", ".md"))
+        files.extend(p for p in docs.glob("*") if p.is_file() and p.suffix.lower() == ".json")
     for path in sorted(set(files)):
         if any(part in {".git", "build", "android", "__pycache__", "user_research"} for part in path.parts):
             continue

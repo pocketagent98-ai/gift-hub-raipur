@@ -211,7 +211,7 @@ def _grid_has_possible_move(grid: List[List[int]]) -> bool:
 def verify_runtime_snapshot(snapshot_path: Path | None, genre: str) -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
     errors: List[str] = []
-    if snapshot_path is None:
+    if snapshot_path is None or not snapshot_path.exists():
         return {
             "status": "NOT_PROVIDED",
             "checks": [],
