@@ -20,6 +20,7 @@ AudioDirector="*res://scripts/audio_director.gd"
 MonetizationManager="*res://scripts/monetization_manager.gd"
 StudioThemeAndVFX="*res://scripts/procedural_polish_theme_and_vfx.gd"
 GameManager="*res://scripts/game_manager.gd"
+SecureLoader="*res://scripts/secure_loader.gd"
 StudioUI="*res://scenes/ui_root.tscn"
 
 [display]
@@ -32,6 +33,9 @@ window/size/mode=0
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
+window/size/resizable=true
+window/size/borderless=false
+window/energy_saving/keep_screen_on=true
 
 [physics]
 
@@ -42,6 +46,8 @@ common/physics_ticks_per_second=60
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.03, 0.05, 0.10, 1)
 
 [debug]
 

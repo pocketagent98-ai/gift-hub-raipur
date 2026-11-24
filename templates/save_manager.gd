@@ -5,13 +5,18 @@ const SAVE_SCHEMA_VERSION := 2
 
 var data: Dictionary = {
         "schema_version": SAVE_SCHEMA_VERSION,
-	"coins": 500,
-	"current_level": 1,
-	"highest_level": 1,
-	"best_score": 0,
-	"boosters": {"hammer": 2, "swap": 2},
-	"ads_removed": false,
-	"daily_reward_claimed": false,
+        "coins": 500,
+        "current_level": 1,
+        "highest_level": 1,
+        "best_score": 0,
+        "boosters": {"hammer": 2, "shuffle": 2, "swap": 2},
+        "level_stars": {},
+        "ads_removed": false,
+        "daily_reward_claimed": false,
+        "daily_reward_day": 1,
+        "last_claim_date": "",
+        "vibration": true,
+        "equipped_booster": "",
 }
 
 func _ready() -> void:
@@ -65,12 +70,12 @@ func spend_coins(amount: int) -> bool:
 
 func set_level(level_num: int) -> void:
 	data["current_level"] = level_num
-	data["highest_level"] = max(int(data.get("highest_level", 1)), level_num)
+	data["highest_level"] = maxi(int(data.get("highest_level", 1)), level_num)
 	save_game()
 
 func add_booster(kind: String, amount: int = 1) -> void:
 	var boosters: Dictionary = data.get("boosters", {})
-	boosters[kind] = int(boosters.get(kind, 0)) + amount
+	boosters[kind] = maxi(0, int(boosters.get(kind, 0)) + amount)
 	data["boosters"] = boosters
 	save_game()
 

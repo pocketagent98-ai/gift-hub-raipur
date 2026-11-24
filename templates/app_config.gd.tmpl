@@ -1,10 +1,18 @@
 extends Node
 
+const SignatureGuard = preload("res://scripts/signature_guard.gd")
+
 const GAME_ID := "__GAME_ID__"
 const GAME_TITLE := "__GAME_TITLE__"
 const GAME_GENRE := "__GENRE__"
 const GAME_VERSION := "__GAME_VERSION__"
 const GAME_CATEGORY := "__CATEGORY__"
+const FINAL_PACKAGE_NAME := "__FINAL_PACKAGE_NAME__"
+const FINAL_APP_NAME := "__FINAL_APP_NAME__"
+const ENABLE_ANTI_REVERSE_ENGINEERING := __ENABLE_ANTI_REVERSE_ENGINEERING__
+const EXPECTED_SIGNING_CERT_SHA256 := "__EXPECTED_SIGNING_CERT_SHA256__"
+const SIGNATURE_CHECK_STRICT := __SIGNATURE_CHECK_STRICT__
+const SECURE_CONFIG_KEY := "__SECURE_CONFIG_KEY__"
 const TARGET_SDK := 36
 const MIN_SDK := 24
 const SCREEN_W := 720
@@ -16,8 +24,16 @@ const AD_MODE := "MOCK_TEMPLATE"
 
 const PUBLIC_CLIENT_CONFIG: Dictionary = {}
 
+var integrity_failed := false
+
+func _ready() -> void:
+        if ENABLE_ANTI_REVERSE_ENGINEERING and not EXPECTED_SIGNING_CERT_SHA256.is_empty():
+                if not SignatureGuard.verify_expected(EXPECTED_SIGNING_CERT_SHA256, SIGNATURE_CHECK_STRICT):
+                        integrity_failed = true
+                        push_error("[APP_CONFIG] Runtime APK signature verification failed. Modded/re-signed build detected.")
+
 func is_production_ads() -> bool:
-	return AD_MODE == "PRODUCTION"
+        return AD_MODE == "PRODUCTION"
 
 func get_client_id(key: String, fallback: String = "") -> String:
-	return str(PUBLIC_CLIENT_CONFIG.get(key, fallback))
+        return str(PUBLIC_CLIENT_CONFIG.get(key, fallback))

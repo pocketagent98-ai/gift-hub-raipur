@@ -1,15 +1,16 @@
 extends Node
 
+const AIExtension = preload("res://scripts/ai_gameplay_extension.gd")
 const BOARD := 8
 const CELLS := 64
 const hits_required := 4
 const PALETTE := [
-	Color(0.96, 0.30, 0.38),
-	Color(0.30, 0.62, 0.98),
-	Color(0.34, 0.86, 0.52),
-	Color(0.98, 0.78, 0.22),
-	Color(0.72, 0.42, 0.96),
-	Color(0.24, 0.86, 0.88),
+        Color(0.96, 0.30, 0.38),
+        Color(0.30, 0.62, 0.98),
+        Color(0.34, 0.86, 0.52),
+        Color(0.98, 0.78, 0.22),
+        Color(0.72, 0.42, 0.96),
+        Color(0.24, 0.86, 0.88),
 ]
 
 var genre := "match_3"
@@ -20,366 +21,522 @@ var moves_left := 0
 var target_score := 0
 var combo := 0
 var selected := -1
+var swap_mode := false
+var level_colors := 4
 var colors: Array[int] = []
 var armor: Array[int] = []
+var specials: Array[int] = []
 var palette: Array = PALETTE
 var board_view: Control
 var board_layer: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
-	colors.resize(CELLS)
-	armor.resize(CELLS)
-	rng.randomize()
-	_build_board_layer()
-	set_board_visible(false)
+        colors.resize(CELLS)
+        armor.resize(CELLS)
+        specials.resize(CELLS)
+        rng.randomize()
+        _build_board_layer()
+        set_board_visible(false)
 
 func _build_board_layer() -> void:
-	board_layer = CanvasLayer.new()
-	board_layer.name = "BoardLayer"
-	board_layer.layer = 5
-	add_child(board_layer)
-	board_view = preload("res://scripts/board_view.gd").new()
-	board_view.name = "BoardView"
-	board_view.manager = self
-	board_view.set_anchors_preset(Control.PRESET_FULL_RECT)
-	board_layer.add_child(board_view)
+        board_layer = CanvasLayer.new()
+        board_layer.name = "BoardLayer"
+        board_layer.layer = 5
+        add_child(board_layer)
+        board_view = preload("res://scripts/board_view.gd").new()
+        board_view.name = "BoardView"
+        board_view.manager = self
+        board_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+        board_layer.add_child(board_view)
 
 func set_board_visible(value: bool) -> void:
-	if board_layer != null:
-		board_layer.visible = value
+        if board_layer != null:
+                board_layer.visible = value
 
 func load_level(level_num: int) -> void:
-	current_level = clamp(level_num, 1, 30)
-	score = 0
-	combo = 0
-	selected = -1
-	target_score = 250 + current_level * 70
-	moves_left = 18 + min(current_level, 12)
-	rng.seed = int(hash(AppConfig.GAME_ID + ":match3:" + str(current_level)))
-	_generate_board()
-	if not has_possible_move():
-		reshuffle()
-	state = "playing"
-	SaveManager.set_level(current_level)
-	StudioUI.show_screen("GameplayHUD")
-	StudioUI.update_hud(current_level, score, moves_left, target_score)
-	set_board_visible(true)
-	if board_view != null:
-		board_view.queue_redraw()
-	AnalyticsManager.record_event("level_started", {"level": current_level, "genre": genre})
+        current_level = clampi(level_num, 1, 30)
+        score = 0
+        combo = 0
+        selected = -1
+        swap_mode = false
+        var tuning: Dictionary = AIExtension.get_level_tuning(current_level)
+        target_score = int(tuning.get("target_score", 250 + current_level * 70))
+        moves_left = int(tuning.get("moves", 18 + mini(current_level, 12)))
+        level_colors = int(tuning.get("colors", 4 if current_level < 3 else (5 if current_level < 12 else 6)))
+        rng.seed = int(hash(AppConfig.GAME_ID + ":match3:" + str(current_level)))
+        _generate_board()
+        if not has_possible_move():
+                reshuffle()
+        state = "playing"
+        SaveManager.set_level(current_level)
+        StudioUI.show_screen("GameplayHUD")
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
+        set_board_visible(true)
+        if board_view != null:
+                board_view.queue_redraw()
+        AnalyticsManager.record_event("level_started", {"level": current_level, "genre": genre})
 
 func _generate_board() -> void:
-	var color_count := _color_count()
-	for r in BOARD:
-		for c in BOARD:
-			var idx := r * BOARD + c
-			var col := rng.randi_range(0, color_count - 1)
-			var guard := 0
-			while guard < 40 and _would_match_at(idx, col):
-				col = rng.randi_range(0, color_count - 1)
-				guard += 1
-			colors[idx] = col
-			armor[idx] = 0
-	var armored_count := 0
-	if current_level >= 3:
-		armored_count = min(2 + int(current_level / 3), 12)
-	for i in armored_count:
-		var idx := rng.randi_range(0, CELLS - 1)
-		armor[idx] = hits_required
+        var color_count := _color_count()
+        for r in BOARD:
+                for c in BOARD:
+                        var idx := r * BOARD + c
+                        var col := rng.randi_range(0, color_count - 1)
+                        var guard := 0
+                        while guard < 40 and _would_match_at(idx, col):
+                                col = rng.randi_range(0, color_count - 1)
+                                guard += 1
+                        colors[idx] = col
+                        armor[idx] = 0
+                        specials[idx] = 0
+        var armored_count := 0
+        if current_level >= 3:
+                armored_count = mini(2 + int(current_level / 3), 12)
+        for i in armored_count:
+                var idx := rng.randi_range(0, CELLS - 1)
+                armor[idx] = hits_required
 
 func _color_count() -> int:
-	if current_level >= 12:
-		return 6
-	if current_level >= 3:
-		return 5
-	return 4
+        return clampi(level_colors, 4, 6)
 
 func _would_match_at(idx: int, col: int) -> bool:
-	var r := int(idx / BOARD)
-	var c := idx % BOARD
-	if c >= 2 and colors[idx - 1] == col and colors[idx - 2] == col:
-		return true
-	if r >= 2 and colors[idx - BOARD] == col and colors[idx - BOARD * 2] == col:
-		return true
-	return false
+        var r := int(idx / BOARD)
+        var c := idx % BOARD
+        if c >= 2 and colors[idx - 1] == col and colors[idx - 2] == col:
+                return true
+        if r >= 2 and colors[idx - BOARD] == col and colors[idx - BOARD * 2] == col:
+                return true
+        return false
 
 func find_match_groups() -> Array:
-	var groups: Array = []
-	for r in BOARD:
-		var c := 0
-		while c < BOARD:
-			var col := colors[r * BOARD + c]
-			if col < 0:
-				c += 1
-				continue
-			var end := c + 1
-			while end < BOARD and colors[r * BOARD + end] == col:
-				end += 1
-			if end - c >= 3:
-				var group: Array = []
-				for k in range(c, end):
-					group.append(r * BOARD + k)
-				groups.append(group)
-			c = end
-	for c in BOARD:
-		var r := 0
-		while r < BOARD:
-			var col := colors[r * BOARD + c]
-			if col < 0:
-				r += 1
-				continue
-			var end := r + 1
-			while end < BOARD and colors[end * BOARD + c] == col:
-				end += 1
-			if end - r >= 3:
-				var group: Array = []
-				for k in range(r, end):
-					group.append(k * BOARD + c)
-				groups.append(group)
-			r = end
-	return groups
+        var groups: Array = []
+        for r in BOARD:
+                var c := 0
+                while c < BOARD:
+                        var col := colors[r * BOARD + c]
+                        if col < 0:
+                                c += 1
+                                continue
+                        var end := c + 1
+                        while end < BOARD and colors[r * BOARD + end] == col:
+                                end += 1
+                        if end - c >= 3:
+                                var group: Array = []
+                                for k in range(c, end):
+                                        group.append(r * BOARD + k)
+                                groups.append(group)
+                        c = end
+        for c in BOARD:
+                var r := 0
+                while r < BOARD:
+                        var col := colors[r * BOARD + c]
+                        if col < 0:
+                                r += 1
+                                continue
+                        var end := r + 1
+                        while end < BOARD and colors[end * BOARD + c] == col:
+                                end += 1
+                        if end - r >= 3:
+                                var group: Array = []
+                                for k in range(r, end):
+                                        group.append(k * BOARD + c)
+                                groups.append(group)
+                        r = end
+        return groups
+
+func _is_horizontal(group: Array) -> bool:
+        if group.size() < 2:
+                return true
+        var row := int(group[0]) / BOARD
+        for idx in group:
+                if int(idx) / BOARD != row:
+                        return false
+        return true
 
 func _swap_raw(a: int, b: int) -> void:
-	var tmp := colors[a]
-	colors[a] = colors[b]
-	colors[b] = tmp
+        var tmp := colors[a]
+        colors[a] = colors[b]
+        colors[b] = tmp
+
+func _swap_full(a: int, b: int) -> void:
+        var tmp := colors[a]
+        colors[a] = colors[b]
+        colors[b] = tmp
+        var armor_tmp := armor[a]
+        armor[a] = armor[b]
+        armor[b] = armor_tmp
+        var special_tmp := specials[a]
+        specials[a] = specials[b]
+        specials[b] = special_tmp
 
 func _are_adjacent(a: int, b: int) -> bool:
-	var ar := int(a / BOARD)
-	var ac := a % BOARD
-	var br := int(b / BOARD)
-	var bc := b % BOARD
-	return abs(ar - br) + abs(ac - bc) == 1
+        var ar := int(a / BOARD)
+        var ac := a % BOARD
+        var br := int(b / BOARD)
+        var bc := b % BOARD
+        return absi(ar - br) + absi(ac - bc) == 1
 
 func swap_cells(a: int, b: int) -> bool:
-	if a < 0 or b < 0 or a >= CELLS or b >= CELLS:
-		return false
-	if not _are_adjacent(a, b):
-		return false
-	var tmp := colors[a]
-	colors[a] = colors[b]
-	colors[b] = tmp
-	var armor_tmp := armor[a]
-	armor[a] = armor[b]
-	armor[b] = armor_tmp
-	if find_match_groups().is_empty():
-		tmp = colors[a]
-		colors[a] = colors[b]
-		colors[b] = tmp
-		armor_tmp = armor[a]
-		armor[a] = armor[b]
-		armor[b] = armor_tmp
-		return false
-	moves_left -= 1
-	_resolve_board()
-	_after_turn()
-	return true
+        if a < 0 or b < 0 or a >= CELLS or b >= CELLS:
+                return false
+        if not _are_adjacent(a, b):
+                return false
+        _swap_full(a, b)
+        if find_match_groups().is_empty():
+                _swap_full(a, b)
+                return false
+        moves_left -= 1
+        _resolve_board()
+        _after_turn()
+        return true
+
+func swap_any_cells(a: int, b: int) -> bool:
+        if a < 0 or b < 0 or a >= CELLS or b >= CELLS or a == b:
+                return false
+        _swap_full(a, b)
+        if find_match_groups().is_empty():
+                _swap_full(a, b)
+                return false
+        moves_left -= 1
+        _resolve_board()
+        _after_turn()
+        return true
+
+func _expand_special_cells(to_clear: Dictionary) -> void:
+        var expanded := true
+        var guard := 0
+        while expanded and guard < 8:
+                expanded = false
+                guard += 1
+                var add := {}
+                for key in to_clear.keys():
+                        var idx := int(key)
+                        var sp := specials[idx]
+                        if sp <= 0:
+                                continue
+                        var r := int(idx / BOARD)
+                        var c := idx % BOARD
+                        if sp == 1:
+                                for cc in BOARD:
+                                        add[r * BOARD + cc] = true
+                        elif sp == 2:
+                                for rr in BOARD:
+                                        add[rr * BOARD + c] = true
+                        elif sp == 3:
+                                for rr in range(maxi(0, r - 1), mini(BOARD, r + 2)):
+                                        for cc in range(maxi(0, c - 1), mini(BOARD, c + 2)):
+                                                add[rr * BOARD + cc] = true
+                for key in add.keys():
+                        if not to_clear.has(key):
+                                to_clear[key] = true
+                                expanded = true
 
 func _resolve_board() -> void:
-	var cascades := 0
-	while cascades < 20:
-		var groups := find_match_groups()
-		if groups.is_empty():
-			break
-		cascades += 1
-		combo = cascades
-		var unique := {}
-		for group in groups:
-			for idx in group:
-				unique[int(idx)] = true
-		for key in unique.keys():
-			var idx := int(key)
-			if armor[idx] > 0:
-				armor[idx] -= 1
-				score += 15 * cascades
-				AudioDirector.play_sfx("pop")
-				StudioThemeAndVFX.burst_at_screen(board_view, idx, Color(0.95, 0.75, 0.20))
-				if armor[idx] == 0:
-					score += 25
-					var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
-					if cam != null:
-						StudioThemeAndVFX.pulse_camera_feedback(cam, 0.10)
-			else:
-				colors[idx] = -1
-				score += 20 * cascades
-				AudioDirector.play_sfx("pop")
-				StudioThemeAndVFX.burst_at_screen(board_view, idx, palette[int(colors[idx]) % palette.size()] if colors[idx] >= 0 else Color.WHITE)
-		_apply_gravity_and_refill()
-	if board_view != null:
-		board_view.queue_redraw()
+        var cascades := 0
+        while cascades < 20:
+                var groups := find_match_groups()
+                if groups.is_empty():
+                        break
+                cascades += 1
+                combo = cascades
+                var to_clear := {}
+                var new_specials := {}
+                for group in groups:
+                        var anchor := -1
+                        if group.size() >= 4:
+                                anchor = int(group[group.size() / 2])
+                                var sp := 3
+                                if group.size() == 4:
+                                        sp = 1 if _is_horizontal(group) else 2
+                                new_specials[anchor] = sp
+                        for idx in group:
+                                if int(idx) != anchor:
+                                        to_clear[int(idx)] = true
+                _expand_special_cells(to_clear)
+                for key in to_clear.keys():
+                        var idx := int(key)
+                        if armor[idx] > 0:
+                                armor[idx] -= 1
+                                score += 15 * cascades
+                                AudioDirector.play_sfx("pop")
+                                StudioThemeAndVFX.burst_at_screen(board_view, idx, Color(0.95, 0.75, 0.20))
+                                if armor[idx] == 0:
+                                        score += 25
+                                        var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
+                                        if cam != null:
+                                                StudioThemeAndVFX.pulse_camera_feedback(cam, 0.10)
+                        else:
+                                var cell_color: Color = palette[int(colors[idx]) % palette.size()] if colors[idx] >= 0 else Color.WHITE
+                                colors[idx] = -1
+                                specials[idx] = 0
+                                score += 20 * cascades
+                                AudioDirector.play_sfx("pop")
+                                StudioThemeAndVFX.burst_at_screen(board_view, idx, cell_color)
+                for key in new_specials.keys():
+                        var idx := int(key)
+                        if colors[idx] >= 0 and armor[idx] == 0:
+                                specials[idx] = int(new_specials[key])
+                _apply_gravity_and_refill()
+        if board_view != null:
+                board_view.queue_redraw()
 
 func _apply_gravity_and_refill() -> void:
-	var color_count := _color_count()
-	for c in BOARD:
-		var write := BOARD - 1
-		for r in range(BOARD - 1, -1, -1):
-			var idx := r * BOARD + c
-			if colors[idx] >= 0:
-				if write != r:
-					var dst := write * BOARD + c
-					colors[dst] = colors[idx]
-					armor[dst] = armor[idx]
-					colors[idx] = -1
-					armor[idx] = 0
-				write -= 1
-		for r in range(write, -1, -1):
-			var idx := r * BOARD + c
-			colors[idx] = rng.randi_range(0, color_count - 1)
-			armor[idx] = 0
+        var color_count := _color_count()
+        for c in BOARD:
+                var write := BOARD - 1
+                for r in range(BOARD - 1, -1, -1):
+                        var idx := r * BOARD + c
+                        if colors[idx] >= 0:
+                                if write != r:
+                                        var dst := write * BOARD + c
+                                        colors[dst] = colors[idx]
+                                        armor[dst] = armor[idx]
+                                        specials[dst] = specials[idx]
+                                        colors[idx] = -1
+                                        armor[idx] = 0
+                                        specials[idx] = 0
+                                write -= 1
+                for r in range(write, -1, -1):
+                        var idx := r * BOARD + c
+                        colors[idx] = rng.randi_range(0, color_count - 1)
+                        armor[idx] = 0
+                        specials[idx] = 0
 
 func _after_turn() -> void:
-	StudioUI.update_hud(current_level, score, moves_left, target_score)
-	SaveManager.data["best_score"] = max(int(SaveManager.data.get("best_score", 0)), score)
-	if score >= target_score:
-		state = "won"
-		AudioDirector.play_sfx("win")
-		StudioUI.show_screen("WinLoseScreen")
-		StudioUI.set_result(true, score, target_score)
-		AnalyticsManager.record_event("level_won", {"level": current_level, "score": score})
-	elif moves_left <= 0:
-		state = "lost"
-		AudioDirector.play_sfx("lose")
-		StudioUI.show_screen("WinLoseScreen")
-		StudioUI.set_result(false, score, target_score)
-		AnalyticsManager.record_event("level_lost", {"level": current_level, "score": score})
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
+        SaveManager.data["best_score"] = maxi(int(SaveManager.data.get("best_score", 0)), score)
+        if score >= target_score:
+                state = "won"
+                var stars := 1
+                if score >= int(target_score * 1.5):
+                        stars = 3
+                elif score >= int(target_score * 1.2):
+                        stars = 2
+                var level_stars: Dictionary = SaveManager.data.get("level_stars", {})
+                level_stars[str(current_level)] = stars
+                SaveManager.data["level_stars"] = level_stars
+                SaveManager.data["highest_level"] = maxi(int(SaveManager.data.get("highest_level", 1)), mini(current_level + 1, 30))
+                SaveManager.save_game()
+                AudioDirector.play_sfx("win")
+                StudioUI.show_screen("WinLoseScreen")
+                StudioUI.set_result(true, score, target_score)
+                AnalyticsManager.record_event("level_won", {"level": current_level, "score": score, "stars": stars})
+        elif moves_left <= 0:
+                state = "lost"
+                AudioDirector.play_sfx("lose")
+                StudioUI.show_screen("WinLoseScreen")
+                StudioUI.set_result(false, score, target_score)
+                AnalyticsManager.record_event("level_lost", {"level": current_level, "score": score})
 
 func has_possible_move() -> bool:
-	return not _find_bot_move().is_empty()
+        return not _find_bot_move().is_empty()
 
 func _find_bot_move() -> Array:
-	for r in BOARD:
-		for c in BOARD:
-			var idx := r * BOARD + c
-			if c + 1 < BOARD:
-				var b := r * BOARD + c + 1
-				_swap_raw(idx, b)
-				var ok := not find_match_groups().is_empty()
-				_swap_raw(idx, b)
-				if ok:
-					return [idx, b]
-			if r + 1 < BOARD:
-				var b2 := (r + 1) * BOARD + c
-				_swap_raw(idx, b2)
-				var ok2 := not find_match_groups().is_empty()
-				_swap_raw(idx, b2)
-				if ok2:
-					return [idx, b2]
-	return []
+        for r in BOARD:
+                for c in BOARD:
+                        var idx := r * BOARD + c
+                        if c + 1 < BOARD:
+                                var b := r * BOARD + c + 1
+                                _swap_raw(idx, b)
+                                var ok := not find_match_groups().is_empty()
+                                _swap_raw(idx, b)
+                                if ok:
+                                        return [idx, b]
+                        if r + 1 < BOARD:
+                                var b2 := (r + 1) * BOARD + c
+                                _swap_raw(idx, b2)
+                                var ok2 := not find_match_groups().is_empty()
+                                _swap_raw(idx, b2)
+                                if ok2:
+                                        return [idx, b2]
+        return []
 
 func reshuffle() -> void:
-	for attempt in 60:
-		_generate_board()
-		if find_match_groups().is_empty() and has_possible_move():
-			return
+        for attempt in 60:
+                _generate_board()
+                if find_match_groups().is_empty() and has_possible_move():
+                        return
 
 func bot_play_step() -> void:
-	if state != "playing":
-		if state == "won":
-			load_level(min(current_level + 1, 30))
-		elif state == "lost":
-			load_level(current_level)
-		return
-	var move := _find_bot_move()
-	if move.size() == 2:
-		swap_cells(int(move[0]), int(move[1]))
-	else:
-		reshuffle()
+        if state != "playing":
+                if state == "won":
+                        load_level(mini(current_level + 1, 30))
+                elif state == "lost":
+                        load_level(current_level)
+                return
+        var move := _find_bot_move()
+        if move.size() == 2:
+                swap_cells(int(move[0]), int(move[1]))
+        else:
+                reshuffle()
 
 func handle_tap(idx: int) -> void:
-	if state != "playing":
-		return
-	if selected == -1:
-		selected = idx
-		AudioDirector.play_ui("click")
-	elif selected == idx:
-		selected = -1
-	elif _are_adjacent(selected, idx):
-		var first := selected
-		selected = -1
-		if not swap_cells(first, idx):
-			AudioDirector.play_ui("click")
-	else:
-		selected = idx
-	if board_view != null:
-		board_view.queue_redraw()
+        if state != "playing":
+                return
+        if swap_mode:
+                if selected == -1:
+                        selected = idx
+                        AudioDirector.play_ui("click")
+                elif selected == idx:
+                        selected = -1
+                        swap_mode = false
+                else:
+                        var first := selected
+                        selected = -1
+                        swap_mode = false
+                        if not swap_any_cells(first, idx):
+                                AudioDirector.play_ui("click")
+                if board_view != null:
+                        board_view.queue_redraw()
+                return
+        if selected == -1:
+                selected = idx
+                AudioDirector.play_ui("click")
+        elif selected == idx:
+                selected = -1
+        elif _are_adjacent(selected, idx):
+                var first := selected
+                selected = -1
+                if not swap_cells(first, idx):
+                        AudioDirector.play_ui("click")
+        else:
+                selected = idx
+        if board_view != null:
+                board_view.queue_redraw()
+
+func _first_nonempty() -> int:
+        for i in CELLS:
+                if colors[i] >= 0:
+                        return i
+        return -1
+
+func use_booster(kind: String) -> bool:
+        var boosters: Dictionary = SaveManager.data.get("boosters", {})
+        var count := int(boosters.get(kind, 0))
+        if count <= 0:
+                return false
+        match kind:
+                "hammer":
+                        var target := selected if selected >= 0 else _first_nonempty()
+                        if target < 0:
+                                return false
+                        var cell_color: Color = palette[int(colors[target]) % palette.size()] if colors[target] >= 0 else Color.WHITE
+                        colors[target] = -1
+                        specials[target] = 0
+                        score += 20
+                        StudioThemeAndVFX.burst_at_screen(board_view, target, cell_color)
+                        SaveManager.add_booster(kind, -1)
+                        selected = -1
+                        _resolve_board()
+                        _after_turn()
+                        return true
+                "shuffle":
+                        reshuffle()
+                        SaveManager.add_booster(kind, -1)
+                        if board_view != null:
+                                board_view.queue_redraw()
+                        return true
+                "swap":
+                        swap_mode = true
+                        selected = -1
+                        SaveManager.add_booster(kind, -1)
+                        StudioUI.show_toast("Tap two candies to swap")
+                        return true
+        return false
+
+func add_moves(amount: int) -> void:
+        moves_left += amount
+        if state == "lost" and moves_left > 0:
+                state = "playing"
+                StudioUI.show_screen("GameplayHUD")
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
 
 func score_for_cluster(size: int, cascade: int = 1) -> int:
-	return size * 20 * cascade
+        return size * 20 * cascade
 
 func apply_hit_to_target(target) -> int:
-	var hp := hits_required
-	if typeof(target) == TYPE_DICTIONARY and target.has("hp"):
-		hp = int(target["hp"])
-	hp -= 1
-	if typeof(target) == TYPE_DICTIONARY:
-		target["hp"] = hp
-		target["state"] = "popped" if hp <= 0 else ("cracked_%d" % hp)
-	return hp
+        var hp := hits_required
+        if typeof(target) == TYPE_DICTIONARY and target.has("hp"):
+                hp = int(target["hp"])
+        hp -= 1
+        if typeof(target) == TYPE_DICTIONARY:
+                target["hp"] = hp
+                target["state"] = "popped" if hp <= 0 else ("cracked_%d" % hp)
+        return hp
 
 func step_mechanics_lab_test() -> String:
-	var lines: Array[String] = []
-	lines.append("[ARMOR_ORACLE] Four-hit armored crystal progression:")
-	var hp := hits_required
-	while hp > 0:
-		var next_hp := hp - 1
-		if next_hp > 0:
-			lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
-		else:
-			lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
-		hp = next_hp
-	lines.append("[ARMOR_ORACLE] Color truth: red cluster clears red only; blue target untouched.")
-	lines.append("[ARMOR_ORACLE] Scoring math: 3-clear=60, 4-clear=80, cascade x2=120 verified.")
-	return "\n".join(lines)
+        var lines: Array[String] = []
+        lines.append("[ARMOR_ORACLE] Four-hit armored crystal progression:")
+        var hp := hits_required
+        while hp > 0:
+                var next_hp := hp - 1
+                if next_hp > 0:
+                        lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
+                else:
+                        lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
+                hp = next_hp
+        lines.append("[ARMOR_ORACLE] Color truth: red cluster clears red only; blue target untouched.")
+        lines.append("[ARMOR_ORACLE] Scoring math: 3-clear=60, 4-clear=80, cascade x2=120 verified.")
+        lines.append("[SPECIAL_ORACLE] " + AIExtension.get_special_rule())
+        return "\n".join(lines)
 
 func run_self_test() -> bool:
-	var saved_colors := colors.duplicate()
-	var saved_armor := armor.duplicate()
-	for i in CELLS:
-		colors[i] = -1
-		armor[i] = 0
-	var row0 := [0, 0, 0, 1, 2, 3, 4, 5]
-	for c in BOARD:
-		colors[c] = row0[c]
-	for r in range(1, BOARD):
-		for c in BOARD:
-			colors[r * BOARD + c] = (r * 3 + c) % 6
-	var groups := find_match_groups()
-	var ok: bool = groups.size() == 1 and groups[0].size() == 3
-	for idx in groups[0]:
-		if int(idx) > 2:
-			ok = false
-	for i in CELLS:
-		colors[i] = (i * 3 + int(i / BOARD)) % 6
-		armor[i] = 0
-	var false_groups := find_match_groups()
-	ok = ok and false_groups.is_empty()
-	ok = ok and score_for_cluster(3) == 60 and score_for_cluster(4) == 80 and score_for_cluster(3, 2) == 120
-	colors.assign(saved_colors)
-	armor.assign(saved_armor)
-	return ok
+        var saved_colors := colors.duplicate()
+        var saved_armor := armor.duplicate()
+        var saved_specials := specials.duplicate()
+        for i in CELLS:
+                colors[i] = -1
+                armor[i] = 0
+                specials[i] = 0
+        var row0 := [0, 0, 0, 1, 2, 3, 4, 5]
+        for c in BOARD:
+                colors[c] = row0[c]
+        for r in range(1, BOARD):
+                for c in BOARD:
+                        colors[r * BOARD + c] = (r * 3 + c) % 6
+        var groups := find_match_groups()
+        var ok: bool = groups.size() == 1 and groups[0].size() == 3
+        for idx in groups[0]:
+                if int(idx) > 2:
+                        ok = false
+        for i in CELLS:
+                colors[i] = (i * 3 + int(i / BOARD)) % 6
+                armor[i] = 0
+        var false_groups := find_match_groups()
+        ok = ok and false_groups.is_empty()
+        ok = ok and score_for_cluster(3) == 60 and score_for_cluster(4) == 80 and score_for_cluster(3, 2) == 120
+        colors.assign(saved_colors)
+        armor.assign(saved_armor)
+        specials.assign(saved_specials)
+        return ok
 
 func test_stitched_chunks(chunks: Array) -> bool:
-	return chunks.size() > 0
+        return chunks.size() > 0
 
 func load_single_chunk(chunk_id: int) -> void:
-	load_level(chunk_id)
+        load_level(chunk_id)
 
 func pulse_camera_feedback(cam: Camera3D, amount: float) -> void:
-	StudioThemeAndVFX.pulse_camera_feedback(cam, amount)
+        StudioThemeAndVFX.pulse_camera_feedback(cam, amount)
 
 func get_snapshot() -> Dictionary:
-	return {
-		"genre": genre,
-		"level": current_level,
-		"score": score,
-		"moves_left": moves_left,
-		"target_score": target_score,
-		"state": state,
-		"armored_cells": armor.count(hits_required),
-	}
+        return {
+                "genre": genre,
+                "level": current_level,
+                "score": score,
+                "moves_left": moves_left,
+                "target_score": target_score,
+                "state": state,
+                "selected": selected,
+                "swap_mode": swap_mode,
+                "armored_cells": armor.count(hits_required),
+                "armor": armor.duplicate(),
+                "specials": specials.duplicate(),
+                "colors": colors.duplicate(),
+        }
 
 func cleanup_qa_runtime_objects() -> void:
-	for child in get_children():
-		if str(child.name).begins_with("QATemp"):
-			child.queue_free()
+        for child in get_children():
+                if str(child.name).begins_with("QATemp"):
+                        child.queue_free()

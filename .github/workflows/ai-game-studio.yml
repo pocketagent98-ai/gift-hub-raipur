@@ -11,6 +11,22 @@ on:
         description: "Optional note stored with the run"
         required: false
         default: "V5.0 sequential relay"
+      action_mode:
+        description: "NEW_GAME / UPDATE_EXISTING / EXPORT_ONLY / FINALIZE_AND_LOCK_RELEASE"
+        required: false
+        default: ""
+      final_package_name:
+        description: "Final Play Store package (only for FINALIZE_AND_LOCK_RELEASE)"
+        required: false
+        default: ""
+      final_app_name:
+        description: "Final Play Store app name (only for FINALIZE_AND_LOCK_RELEASE)"
+        required: false
+        default: ""
+      enable_anti_reverse_engineering:
+        description: "true/false: enable final R8/vault/signature lock"
+        required: false
+        default: "true"
 
 permissions:
   contents: write
@@ -36,7 +52,16 @@ jobs:
     environment: production-studio
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      action_mode: ${{ steps.mode.outputs.action_mode }}
+      final_package_name: ${{ steps.mode.outputs.final_package_name }}
+      final_app_name: ${{ steps.mode.outputs.final_app_name }}
+      enable_anti_reverse_engineering: ${{ steps.mode.outputs.enable_anti_reverse_engineering }}
     env:
+      INPUT_ACTION_MODE: ${{ inputs.action_mode }}
+      INPUT_FINAL_PACKAGE_NAME: ${{ inputs.final_package_name }}
+      INPUT_FINAL_APP_NAME: ${{ inputs.final_app_name }}
+      INPUT_ENABLE_ANTI_REVERSE_ENGINEERING: ${{ inputs.enable_anti_reverse_engineering }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -72,6 +97,32 @@ jobs:
           rm -rf /tmp/docs_keep
           ls -la docs
 
+      - name: Resolve action mode and final release identity
+        id: mode
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          ACTION_MODE="${INPUT_ACTION_MODE:-}"
+          if [ -z "$ACTION_MODE" ]; then
+            ACTION_MODE=$(grep -i '^ACTION_MODE:' ORDER.md | head -1 | cut -d: -f2- | xargs || true)
+          fi
+          [ -z "$ACTION_MODE" ] && ACTION_MODE="NEW_GAME"
+          case "$(echo "$ACTION_MODE" | tr '[:upper:]' '[:lower:]')" in
+            *finalize*|*lock*) ACTION_MODE="FINALIZE_AND_LOCK_RELEASE" ;;
+            *update*) ACTION_MODE="UPDATE_EXISTING" ;;
+            *export*) ACTION_MODE="EXPORT_ONLY" ;;
+            *rollback*) ACTION_MODE="ROLLBACK" ;;
+            *) ACTION_MODE="NEW_GAME" ;;
+          esac
+          FINAL_PACKAGE="${INPUT_FINAL_PACKAGE_NAME:-$(grep -i '^FINAL_PACKAGE_NAME:' ORDER.md | head -1 | cut -d: -f2- | xargs || true)}"
+          FINAL_APP="${INPUT_FINAL_APP_NAME:-$(grep -i '^FINAL_APP_NAME:' ORDER.md | head -1 | cut -d: -f2- | xargs || true)}"
+          ANTI_RE="${INPUT_ENABLE_ANTI_REVERSE_ENGINEERING:-$(grep -i '^ENABLE_ANTI_REVERSE_ENGINEERING:' ORDER.md | head -1 | cut -d: -f2- | xargs || echo true)}"
+          echo "action_mode=$ACTION_MODE" >> "$GITHUB_OUTPUT"
+          echo "final_package_name=$FINAL_PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "final_app_name=$FINAL_APP" >> "$GITHUB_OUTPUT"
+          echo "enable_anti_reverse_engineering=$ANTI_RE" >> "$GITHUB_OUTPUT"
+          echo "[MODE] $ACTION_MODE | final_package=$FINAL_PACKAGE | anti_re=$ANTI_RE"
+
       - name: "Pre-Flight API Probe (NVIDIA NIM / Gemini / HF, 10s each)"
         timeout-minutes: 2
         run: timeout -k 15s 60s python3 scripts/preflight_api_probe.py
@@ -89,6 +140,22 @@ jobs:
           timeout -k 15s 90s python3 scripts/generate_intelligence_dossier.py
           timeout -k 15s 90s python3 scripts/fusion_engine.py --project-root .
           timeout -k 15s 90s python3 scripts/generate_complete_game_bible.py
+          timeout -k 15s 120s python3 scripts/ai_game_designer.py --project-root .
+
+      - name: Stage 1 fail-closed anti-stub gate + one self-heal cycle
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          GAME_ID=$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)
+          GENRE=$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)
+          if ! timeout -k 15s 120s python3 scripts/pro_quality_gate.py --stage stage1 --game-id "$GAME_ID" --genre "$GENRE"; then
+            echo "[STAGE1] Gate failed; running autonomous self-heal."
+            timeout -k 15s 120s python3 scripts/dsh_self_heal.py --stage stage1 --attempt 1
+            timeout -k 15s 90s python3 scripts/fusion_engine.py --project-root .
+            timeout -k 15s 90s python3 scripts/generate_complete_game_bible.py
+            timeout -k 15s 120s python3 scripts/ai_game_designer.py --project-root . --force
+            timeout -k 15s 120s python3 scripts/pro_quality_gate.py --stage stage1 --game-id "$GAME_ID" --genre "$GENRE"
+          fi
 
       - name: Upload clean Stage 1 blueprints to HF Vault
         timeout-minutes: 5
@@ -109,6 +176,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
+      ACTION_MODE: ${{ needs.stage1_recon_and_blueprints.outputs.action_mode }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -147,6 +215,10 @@ jobs:
           timeout -k 15s 240s pip install -r requirements.lock.txt
           timeout -k 15s 60s python3 scripts/stage_cleanup_guard.py --stage stage2 --min-free-gb "${MIN_FREE_GB}"
 
+      - name: Run anti-stub quality gate unit tests
+        timeout-minutes: 4
+        run: timeout -k 15s 180s python3 -m unittest discover -s test -p 'test_*.py' -v
+
       - name: Download FULL Godot 4.7.2 Stable GUI editor (no server binary)
         timeout-minutes: 5
         run: |
@@ -159,6 +231,7 @@ jobs:
           timeout -k 15s 30s xvfb-run -a -s "-screen 0 720x1280x24" godot --version
 
       - name: Pull Stage 1 blueprints and initialize vault
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 5
         run: |
           rm -rf docs
@@ -169,7 +242,21 @@ jobs:
           GAME_ID=$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)
           echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
 
+      - name: "Finalize mode: pull approved latest build from HF Vault (no rebuild)"
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode == 'FINALIZE_AND_LOCK_RELEASE'
+        timeout-minutes: 6
+        run: |
+          rm -rf docs assets/custom build android
+          mkdir -p /dev/shm/private_studio_vault docs
+          timeout -k 15s 120s python3 scripts/hf_vault_sync.py resolve_command
+          timeout -k 15s 180s python3 scripts/hf_vault_sync.py init_or_pull
+          GAME_ID=$(jq -r '.game_id' /dev/shm/private_studio_vault/resolved_job.json)
+          GENRE=$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)
+          echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
+          echo "GENRE=$GENRE" >> "$GITHUB_ENV"
+
       - name: Cross-Game Clean Workspace Guard
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 3
         run: |
           PREV_GAME_ID=$(jq -r '.previous_game_id // "none"' docs/GAMES_VAULT_LEDGER.json 2>/dev/null || echo "none")
@@ -181,6 +268,7 @@ jobs:
             scenes/ui_root.tscn scenes/qa_bootstrap.tscn
 
       - name: Generate 100% original clean-room game (deterministic factory)
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 4
         run: |
           timeout -k 15s 120s python3 scripts/studio_game_factory.py --project-root .
@@ -188,6 +276,7 @@ jobs:
           timeout -k 15s 60s python3 scripts/asset_validator.py
 
       - name: Run dsh + skills + 24 specialist agents + Zero-Bug Sentinel
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 12
         run: |
           timeout -k 15s 90s python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json
@@ -198,6 +287,7 @@ jobs:
           timeout -k 15s 60s python3 scripts/asset_validator.py
 
       - name: Import generated project in FULL Godot GUI and fail on script errors
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 5
         run: |
           set -o pipefail
@@ -208,7 +298,38 @@ jobs:
             exit 1
           fi
 
+      - name: Fail-closed Stage 2 anti-stub gate with 3 autonomous self-heal cycles
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
+        timeout-minutes: 12
+        run: |
+          set -o pipefail
+          GENRE=$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)
+          PASS=0
+          for ATTEMPT in 1 2 3; do
+            if timeout -k 15s 180s python3 scripts/pro_quality_gate.py --stage stage2 --game-id "$GAME_ID" --genre "$GENRE"; then
+              PASS=1
+              break
+            fi
+            echo "[STAGE2] Quality gate failed on attempt $ATTEMPT; invoking dsh self-heal."
+            timeout -k 15s 180s python3 scripts/dsh_self_heal.py --stage stage2 --attempt "$ATTEMPT"
+            timeout -k 15s 120s python3 scripts/studio_game_factory.py --project-root .
+            timeout -k 15s 120s python3 scripts/original_asset_factory.py .
+            timeout -k 15s 600s python3 scripts/orchestrate_24_agents.py
+            timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre "$GENRE" --runtime-snapshot /tmp/studio_qa/runtime_snapshot.json || true
+          done
+          if [ "$PASS" -ne 1 ]; then
+            timeout -k 15s 180s python3 scripts/pro_quality_gate.py --stage stage2 --game-id "$GAME_ID" --genre "$GENRE"
+          fi
+
+      - name: "Finalize mode: verify approved build still passes the anti-stub gate"
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode == 'FINALIZE_AND_LOCK_RELEASE'
+        timeout-minutes: 4
+        run: |
+          GENRE=$(jq -r '.genre' /dev/shm/private_studio_vault/resolved_job.json)
+          timeout -k 15s 180s python3 scripts/pro_quality_gate.py --stage stage2 --game-id "$GAME_ID" --genre "$GENRE"
+
       - name: Upload coded project snapshot to HF Vault
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode != 'FINALIZE_AND_LOCK_RELEASE'
         timeout-minutes: 5
         run: timeout -k 15s 240s python3 scripts/hf_vault_sync.py push_stage2_project
 
@@ -224,6 +345,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
+      ACTION_MODE: ${{ needs.stage1_recon_and_blueprints.outputs.action_mode }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -337,28 +459,77 @@ jobs:
           echo "GAME_ID=$GAME_ID" >> "$GITHUB_ENV"
           echo "GENRE=$GENRE" >> "$GITHUB_ENV"
 
-      - name: Zero-Bug Sentinel (rules, colours, armour, levels, boundaries)
-        timeout-minutes: 3
-        run: timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre "$GENRE"
-
-      - name: Record 4 Movie Maker QA videos ONE AT A TIME and inspect
-        timeout-minutes: 10
+      - name: Zero-Bug Sentinel on live runtime snapshots (anti-stuck / anti-clipping / grounding)
+        timeout-minutes: 5
         run: |
           mkdir -p /tmp/studio_qa
+          timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+            godot --rendering-method gl_compatibility --rendering-driver opengl3 --path . \
+            res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite=runtime_snapshot --qa-output-dir=/tmp/studio_qa
+          test -s /tmp/studio_qa/runtime_snapshot.json
+          timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre "$GENRE" --runtime-snapshot /tmp/studio_qa/runtime_snapshot.json
+
+      - name: "4 Movie Maker QA videos + strict visual critic + 3 autonomous self-heal cycles"
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/studio_qa /tmp/qa_videos docs
           GAME_CAT=$(jq -r '.game_category // "level_by_level"' /dev/shm/private_studio_vault/resolved_job.json)
           MAIN_GAMEPLAY_SUITE=multi_levels
           [[ "$GAME_CAT" == "endless_map_chunks" ]] && MAIN_GAMEPLAY_SUITE=endless_chunks
           QUIT_FRAMES=150
-          for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
-            AVI="/tmp/qa_videos/${SUITE}.avi"; MP4="/tmp/qa_videos/${SUITE}.mp4"
-            rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$AVI" "$MP4" "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png"
-            timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
-            test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
-            montage /tmp/studio_qa/qa_${SUITE}_1_side_ground.png /tmp/studio_qa/qa_${SUITE}_2_front.png /tmp/studio_qa/qa_${SUITE}_3_top_down.png /tmp/studio_qa/qa_${SUITE}_4_iso.png -tile 2x2 -geometry +4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
-            timeout -k 15s 90s ffmpeg -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
-            rm -f "$AVI"
-            timeout -k 15s 60s python3 scripts/multi_video_inspector.py "$SUITE" "$MP4" /tmp/studio_qa
+          PASS=0
+          for ATTEMPT in 1 2 3; do
+            echo "=== QA SELF-HEAL CYCLE $ATTEMPT/3 ==="
+            rm -f docs/VISUAL_CRITIC_REPORT.json docs/ZERO_BUG_SENTINEL_REPORT.json
+            rm -f /tmp/studio_qa/telemetry_*.txt /tmp/qa_videos/*.mp4 /tmp/qa_videos/*.avi /tmp/studio_qa/qa_4cam_grid_*.png
+            timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+              godot --rendering-method gl_compatibility --rendering-driver opengl3 --path . \
+              res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite=runtime_snapshot --qa-output-dir=/tmp/studio_qa
+            test -s /tmp/studio_qa/runtime_snapshot.json
+            timeout -k 15s 120s python3 scripts/zero_bug_sentinel.py --project-root . --game-id "$GAME_ID" --genre "$GENRE" --runtime-snapshot /tmp/studio_qa/runtime_snapshot.json
+            VIDEO_FAIL=0
+            for SUITE in "ui_shop" "mechanics_lab" "$MAIN_GAMEPLAY_SUITE" "save_ads_and_edge"; do
+              AVI="/tmp/qa_videos/${SUITE}.avi"; MP4="/tmp/qa_videos/${SUITE}.mp4"
+              rm -f "/tmp/studio_qa/telemetry_${SUITE}.txt" "$AVI" "$MP4" "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png"
+              timeout -k 15s 180s xvfb-run --auto-servernum -s "-screen 0 720x1280x24" \
+                godot --rendering-method gl_compatibility --rendering-driver opengl3 --write-movie "$AVI" --fixed-fps 15 --quit-after "$QUIT_FRAMES" \
+                res://scenes/qa_bootstrap.tscn -- --qa-mode=true --suite="$SUITE" --qa-output-dir=/tmp/studio_qa
+              test -s "/tmp/studio_qa/telemetry_${SUITE}.txt"
+              montage "/tmp/studio_qa/qa_${SUITE}_1_side_ground.png" "/tmp/studio_qa/qa_${SUITE}_2_front.png" "/tmp/studio_qa/qa_${SUITE}_3_top_down.png" "/tmp/studio_qa/qa_${SUITE}_4_iso.png" -tile 2x2 -geometry +4+4 "/tmp/studio_qa/qa_4cam_grid_${SUITE}.png" || true
+              timeout -k 15s 90s ffmpeg -y -i "$AVI" -vf scale=720:1280 -c:v libx264 -preset veryfast -crf 26 -c:a aac -b:a 96k "$MP4"
+              rm -f "$AVI"
+              if ! timeout -k 15s 90s python3 scripts/multi_video_inspector.py "$SUITE" "$MP4" /tmp/studio_qa --project-root .; then
+                VIDEO_FAIL=1
+                break
+              fi
+            done
+            if [ "$VIDEO_FAIL" -eq 0 ]; then
+              timeout -k 15s 120s python3 scripts/independent_polish_reviewer.py . || VIDEO_FAIL=1
+            fi
+            if [ "$VIDEO_FAIL" -eq 0 ] && timeout -k 15s 180s python3 scripts/pro_quality_gate.py --stage stage3 --game-id "$GAME_ID" --genre "$GENRE"; then
+              PASS=1
+              break
+            fi
+            echo "[STAGE3] Visual/quality rejection on attempt $ATTEMPT; invoking dsh self-heal + rebuild."
+            rm -f /tmp/pro_quality_feedback.json
+            timeout -k 15s 180s python3 scripts/dsh_self_heal.py --stage stage3 --attempt "$ATTEMPT" || true
+            timeout -k 15s 120s python3 scripts/studio_game_factory.py --project-root .
+            timeout -k 15s 120s python3 scripts/original_asset_factory.py .
+            timeout -k 15s 90s python3 scripts/ui_element_and_interaction_mapper.py --project-root . --out docs/UI_ELEMENT_AND_INTERACTION_MAP.json || true
           done
+          if [ "$PASS" -ne 1 ]; then
+            timeout -k 15s 180s python3 scripts/pro_quality_gate.py --stage stage3 --game-id "$GAME_ID" --genre "$GENRE"
+          fi
+
+      - name: "Finalize release lock: package rename, R8/ProGuard, encrypted config vault, signer check"
+        if: needs.stage1_recon_and_blueprints.outputs.action_mode == 'FINALIZE_AND_LOCK_RELEASE'
+        timeout-minutes: 5
+        run: |
+          timeout -k 15s 180s python3 scripts/finalize_release.py --project-root . --vault-dir /dev/shm/private_studio_vault
+          test -s docs/FINAL_RELEASE_LOCK.json
+          test -s assets/secure/config_vault.enc
+          grep -q 'package/unique_name="' export_presets.cfg
 
       - name: Switch AD_MODE to PRODUCTION and export signed APK + AAB
         timeout-minutes: 20
@@ -394,6 +565,9 @@ jobs:
         run: |
           timeout -k 15s 60s python3 scripts/store_kit_builder.py --project-root . --out build/store_kit
           timeout -k 15s 540s python3 scripts/hf_vault_sync.py push_private_everything
+          if [ "${ACTION_MODE:-NEW_GAME}" = "FINALIZE_AND_LOCK_RELEASE" ]; then
+            timeout -k 15s 300s python3 scripts/hf_vault_sync.py push_final_release
+          fi
           timeout -k 15s 60s python3 scripts/godot_version_migrator.py --check
 
       - name: Stage release assets (APK, AAB, QA videos, Store-Kit, Sentinel report)
@@ -426,8 +600,15 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^GAME_VERSION:\s*(\S+)',t,re.M);print(m.group(1) if m else 'v1.0.0')")
-          TAG="${GAME_ID}-${VERSION}"
-          TITLE="AI Game Studio - ${GAME_ID} ${VERSION}"
+          if [ "${ACTION_MODE:-NEW_GAME}" = "FINALIZE_AND_LOCK_RELEASE" ]; then
+            FINAL_PKG=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^FINAL_PACKAGE_NAME:\s*(\S+)',t,re.M);print(m.group(1) if m else 'final')")
+            TAG="${GAME_ID}-${FINAL_PKG}-${VERSION}"
+            TITLE="AI Game Studio FINAL LOCK - ${FINAL_PKG} ${VERSION}"
+          else
+            FINAL_PKG=""
+            TAG="${GAME_ID}-${VERSION}"
+            TITLE="AI Game Studio - ${GAME_ID} ${VERSION}"
+          fi
           APK=build/release_assets/game_install.apk
           AAB=build/release_assets/game_release.aab
           APK_SIZE=$(stat -c%s "$APK")
@@ -444,6 +625,8 @@ jobs:
           - **Workflow run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           - **QA:** Zero-Bug Sentinel PASS; 4 Movie Maker QA videos PASS
           - **Android:** Target SDK 36, Min SDK 24, arm64-v8a, 16 KB page aligned
+          - **Final package:** ${FINAL_PKG:-preview package}
+          - **Hardening:** R8/ProGuard, binary resources, encrypted config vault, signer fingerprint (final mode)
 
           ### Direct downloads
           - \`game_install.apk\` — signed, direct Android install (${APK_SIZE} bytes, SHA-256 \`${APK_SHA}\`)
@@ -468,7 +651,12 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^GAME_VERSION:\s*(\S+)',t,re.M);print(m.group(1) if m else 'v1.0.0')")
-          TAG="${GAME_ID}-${VERSION}"
+          if [ "${ACTION_MODE:-NEW_GAME}" = "FINALIZE_AND_LOCK_RELEASE" ]; then
+            FINAL_PKG=$(python3 -c "import re,pathlib;t=pathlib.Path('ORDER.md').read_text(encoding='utf-8');m=re.search(r'^FINAL_PACKAGE_NAME:\s*(\S+)',t,re.M);print(m.group(1) if m else 'final')")
+            TAG="${GAME_ID}-${FINAL_PKG}-${VERSION}"
+          else
+            TAG="${GAME_ID}-${VERSION}"
+          fi
           rm -rf /tmp/release_verify
           mkdir -p /tmp/release_verify
           for i in 1 2 3 4 5; do

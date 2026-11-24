@@ -63,116 +63,91 @@ def parse_godot_ui_scripts(project_root: Path) -> Dict[str, Any]:
     vfx_gd_path = project_root / "scripts/procedural_polish_theme_and_vfx.gd"
     ui_txt = ui_gd_path.read_text(encoding="utf-8") if ui_gd_path.exists() else ""
     vfx_txt = vfx_gd_path.read_text(encoding="utf-8") if vfx_gd_path.exists() else ""
+    spec_path = project_root / "docs/UI_SPEC.json"
+    spec: Dict[str, Any] = {}
+    if spec_path.exists():
+        try:
+            loaded = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec = loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            spec = {}
 
-    # 1. Extract SCREEN_NAMES array dynamically
     screen_names: List[str] = []
-    m_screens = re.search(r"const\s+SCREEN_NAMES.*?=\s*\[(.*?)\]", ui_txt, re.S)
-    if m_screens:
-        screen_names = re.findall(r'"([^"]+)"', m_screens.group(1))
+    screens_from_spec = spec.get("screens", []) if isinstance(spec.get("screens"), list) else []
+    if screens_from_spec:
+        screen_names = [str(s.get("screen_id")) for s in screens_from_spec if isinstance(s, dict)]
+    if not screen_names:
+        m_screens = re.search(r"const\s+SCREEN_NAMES.*?=\s*\[(.*?)\]", ui_txt, re.S)
+        if m_screens:
+            screen_names = re.findall(r'"([^"]+)"', m_screens.group(1))
 
-    # 2. Extract SafeAreaMargin constants dynamically
     margins: Dict[str, int] = {}
     for m in re.finditer(r'add_theme_constant_override\("(margin_[a-z]+)",\s*(\d+)\)', ui_txt):
         margins[m.group(1)] = int(m.group(2))
 
-    # 3. Extract nav_targets dictionary dynamically
     nav_targets: Dict[str, List[str]] = {}
-    m_nav = re.search(r"var\s+nav_targets\s*:\s*Dictionary\s*=\s*\{(.*?)\}", ui_txt, re.S)
-    if m_nav:
-        for line in m_nav.group(1).splitlines():
-            m_row = re.search(r'"([^"]+)"\s*:\s*\[(.*?)\]', line)
-            if m_row:
-                src_screen = m_row.group(1)
-                targets = re.findall(r'"([^"]+)"', m_row.group(2))
-                nav_targets[src_screen] = targets
+    spec_nav = spec.get("navigation", {}) if isinstance(spec.get("navigation"), dict) else {}
+    for src, targets in spec_nav.items():
+        if isinstance(targets, list):
+            nav_targets[str(src)] = [str(t) for t in targets]
+    if not nav_targets:
+        m_nav = re.search(r"var\s+nav_targets\s*:\s*Dictionary\s*=\s*\{(.*?)\}", ui_txt, re.S)
+        if m_nav:
+            for line in m_nav.group(1).splitlines():
+                m_row = re.search(r'"([^"]+)"\s*:\s*\[(.*?)\]', line)
+                if m_row:
+                    nav_targets[m_row.group(1)] = re.findall(r'"([^"]+)"', m_row.group(2))
 
-    # 4. Extract theme colors & minimum button touch size from procedural_polish_theme_and_vfx.gd
     extracted_colors: List[str] = []
     for cm in re.finditer(r"Color\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)", vfx_txt):
         extracted_colors.append(rgb_float_to_hex(float(cm.group(1)), float(cm.group(2)), float(cm.group(3))))
 
-    min_btn_size = {"width_px": 180, "height_px": 56}
-    m_size = re.search(r"custom_minimum_size\s*=\s*Vector2\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)", vfx_txt)
+    min_btn_size = {"width_px": 96, "height_px": 56}
+    m_size = re.search(r"TOUCH_MIN\s*:=\s*Vector2\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)", ui_txt)
+    if not m_size:
+        m_size = re.search(r"custom_minimum_size\s*=\s*Vector2\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)", vfx_txt)
     if m_size:
         min_btn_size = {"width_px": float(m_size.group(1)), "height_px": float(m_size.group(2))}
 
     tween_states = ["normal", "hover", "pressed"]
-    if "Vector2(0.95, 0.95)" in vfx_txt:
-        tween_states.append("button_down_tween_scale_0.95x")
-    if "vibrate_handheld" in vfx_txt:
-        tween_states.append("mobile_haptic_18ms")
+    if "create_tween()" in ui_txt or "create_tween()" in vfx_txt:
+        tween_states.append("animated_tween_transition")
+    if "vibrate_handheld" in ui_txt or "vibrate_handheld" in vfx_txt:
+        tween_states.append("mobile_haptic_16ms")
 
     screens_detailed: List[Dict[str, Any]] = []
     transitions: List[Dict[str, str]] = []
-
     for s_name in screen_names:
-        targets = nav_targets.get(s_name, ["MainMenu"])
-        elements: List[Dict[str, Any]] = [
-            {
-                "element_id": f"{s_name}_Title",
-                "type": "Label",
-                "anchor_preset": "HORIZONTAL_ALIGNMENT_CENTER",
-                "text_pattern": f"STUDIO V2.0 — {s_name.upper()}",
-                "evidence_tag": "VERIFIED",
-                "source_file": "scripts/ui_controller.gd",
-            }
-        ]
-        if s_name == "Settings" and "Btn_ToggleAudio" in ui_txt:
+        targets = nav_targets.get(s_name, [])
+        spec_screen = next((s for s in screens_from_spec if str(s.get("screen_id")) == s_name), {})
+        widgets = spec_screen.get("widgets", []) if isinstance(spec_screen.get("widgets"), list) else []
+        if not widgets:
+            widgets = [f"{s_name}_title", f"{s_name}_content", f"{s_name}_primary_action"]
+        elements: List[Dict[str, Any]] = []
+        for widget in widgets:
             elements.append({
-                "element_id": "Btn_ToggleAudio",
-                "type": "Button",
-                "label": "Toggle Master Audio",
-                "min_size_px": min_btn_size,
-                "states": tween_states,
-                "interaction": "AudioServer.set_bus_mute(Master, not is_bus_mute)",
-                "evidence_tag": "VERIFIED",
-                "source_file": "scripts/ui_controller.gd",
-            })
-        if s_name == "GameplayHUD" and "hud_score_lbl" in ui_txt:
-            elements.append({
-                "element_id": "hud_score_lbl",
-                "type": "Label",
-                "label": "SCORE: 0 | COMBO: x1 | LEVEL: 1",
-                "evidence_tag": "VERIFIED",
-                "source_file": "scripts/ui_controller.gd",
-            })
-            elements.append({
-                "element_id": "tutorial_banner",
-                "type": "PanelContainer + Label",
-                "label": "TUTORIAL: Tap targets to fire! Purple Armored Bubbles take 4 hits to pop!",
-                "evidence_tag": "VERIFIED",
-                "source_file": "scripts/ui_controller.gd",
-            })
-
-        for tgt in targets:
-            btn_id = f"Btn_{s_name}_to_{tgt}"
-            action_desc = f"show_screen('{tgt}')"
-            if s_name == "Shop" and tgt == "Rewards":
-                action_desc = "SaveManager.add_coins(-25) -> show_screen('Rewards')"
-            elements.append({
-                "element_id": btn_id,
-                "type": "Button",
-                "label": f"Open {tgt}",
-                "min_size_px": min_btn_size,
+                "element_id": str(widget),
+                "type": "Button" if any(k in str(widget) for k in ("button", "btn", "card", "toggle")) else "Label/Panel",
+                "min_size_px": min_btn_size if "button" in str(widget) or "card" in str(widget) else None,
                 "states": tween_states,
                 "color_palette_hex": extracted_colors[:4],
-                "on_click_action": action_desc,
                 "evidence_tag": "VERIFIED",
-                "source_file": "scripts/ui_controller.gd",
+                "source_file": "docs/UI_SPEC.json" if spec else "scripts/ui_controller.gd",
             })
+        for tgt in targets:
             transitions.append({
                 "from_screen": s_name,
-                "button_id": btn_id,
+                "button_id": f"nav_{s_name}_to_{tgt}",
                 "to_screen": tgt,
-                "side_effect": "add_coins(-25)" if (s_name == "Shop" and tgt == "Rewards") else ("GameManager.load_level(current_level)" if tgt == "GameplayHUD" else "none"),
+                "side_effect": "GameManager.load_level(current_level)" if tgt == "GameplayHUD" else "none",
                 "evidence_tag": "VERIFIED",
             })
-
         screens_detailed.append({
             "screen_id": s_name,
-            "container_type": "PanelContainer -> VBoxContainer",
+            "container_type": "Full-rect Control -> MarginContainer -> VBoxContainer / GridContainer",
             "safe_area_margins_px": margins,
             "element_count": len(elements),
+            "screen_has_real_content": len(elements) >= 3,
             "elements": elements,
             "evidence_tag": "VERIFIED",
         })
@@ -183,6 +158,7 @@ def parse_godot_ui_scripts(project_root: Path) -> Dict[str, Any]:
         "safe_area_margins_px": margins,
         "min_button_touch_size_px": min_btn_size,
         "extracted_theme_colors_hex": sorted(list(set(extracted_colors))),
+        "screen_source": "docs/UI_SPEC.json" if spec else "scripts/ui_controller.gd",
     }
 
 

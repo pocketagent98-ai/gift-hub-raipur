@@ -1,15 +1,16 @@
 extends Node
 
+const AIExtension = preload("res://scripts/ai_gameplay_extension.gd")
 const BOARD := 8
 const hits_required := 4
 const TEMP_CAPACITY := 3
 const PALETTE := [
-	Color(0.96, 0.34, 0.40),
-	Color(0.32, 0.64, 0.98),
-	Color(0.36, 0.86, 0.54),
-	Color(0.98, 0.78, 0.24),
-	Color(0.74, 0.44, 0.96),
-	Color(0.24, 0.86, 0.88),
+        Color(0.96, 0.34, 0.40),
+        Color(0.32, 0.64, 0.98),
+        Color(0.36, 0.86, 0.54),
+        Color(0.98, 0.78, 0.24),
+        Color(0.74, 0.44, 0.96),
+        Color(0.24, 0.86, 0.88),
 ]
 
 var genre := "screw_puzzle"
@@ -20,6 +21,7 @@ var moves_left := 0
 var target_score := 0
 var combo := 0
 var selected := -1
+var level_colors := 3
 var plates: Array = []
 var screws: Array = []
 var tools: Array[int] = []
@@ -30,326 +32,404 @@ var board_layer: CanvasLayer
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
-	rng.randomize()
-	_build_board_layer()
-	set_board_visible(false)
+        rng.randomize()
+        _build_board_layer()
+        set_board_visible(false)
 
 func _build_board_layer() -> void:
-	board_layer = CanvasLayer.new()
-	board_layer.name = "BoardLayer"
-	board_layer.layer = 5
-	add_child(board_layer)
-	board_view = preload("res://scripts/board_view.gd").new()
-	board_view.name = "BoardView"
-	board_view.manager = self
-	board_view.set_anchors_preset(Control.PRESET_FULL_RECT)
-	board_layer.add_child(board_view)
+        board_layer = CanvasLayer.new()
+        board_layer.name = "BoardLayer"
+        board_layer.layer = 5
+        add_child(board_layer)
+        board_view = preload("res://scripts/board_view.gd").new()
+        board_view.name = "BoardView"
+        board_view.manager = self
+        board_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+        board_layer.add_child(board_view)
 
 func set_board_visible(value: bool) -> void:
-	if board_layer != null:
-		board_layer.visible = value
+        if board_layer != null:
+                board_layer.visible = value
 
 func load_level(level_num: int) -> void:
-	current_level = clamp(level_num, 1, 30)
-	score = 0
-	combo = 0
-	selected = -1
-	rng.seed = int(hash(AppConfig.GAME_ID + ":screw:" + str(current_level)))
-	_generate_screw_level()
-	state = "playing"
-	SaveManager.set_level(current_level)
-	StudioUI.show_screen("GameplayHUD")
-	StudioUI.update_hud(current_level, score, moves_left, target_score)
-	set_board_visible(true)
-	if board_view != null:
-		board_view.queue_redraw()
-	AnalyticsManager.record_event("level_started", {"level": current_level, "genre": genre})
+        current_level = clampi(level_num, 1, 30)
+        score = 0
+        combo = 0
+        selected = -1
+        rng.seed = int(hash(AppConfig.GAME_ID + ":screw:" + str(current_level)))
+        var tuning: Dictionary = AIExtension.get_level_tuning(current_level)
+        level_colors = int(tuning.get("colors", 3 + int(current_level >= 3) + int(current_level >= 10) + int(current_level >= 20)))
+        _generate_screw_level()
+        state = "playing"
+        SaveManager.set_level(current_level)
+        StudioUI.show_screen("GameplayHUD")
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
+        set_board_visible(true)
+        if board_view != null:
+                board_view.queue_redraw()
+        AnalyticsManager.record_event("level_started", {"level": current_level, "genre": genre})
 
 func _generate_screw_level() -> void:
-	plates.clear()
-	screws.clear()
-	temp.clear()
-	tools.clear()
-	var plate_count: int = clamp(3 + int(current_level / 3), 3, 9)
-	var color_count := 3
-	if current_level >= 3:
-		color_count = 4
-	if current_level >= 10:
-		color_count = 5
-	if current_level >= 20:
-		color_count = 6
-	var band_h := 8.0 / float(plate_count)
-	for i in plate_count:
-		var plate := {
-			"id": i,
-			"color": i % color_count,
-			"rect": Rect2(0.35, i * band_h + 0.12, 7.3, band_h - 0.24),
-			"blocked_by": (i - 1) if i > 0 else -1,
-			"removed": false,
-			"screw_indices": [],
-		}
-		plates.append(plate)
-		var positions: Array = [1.5, 4.0, 6.5]
-		if i % 2 == 1:
-			positions = [1.0, 3.0, 5.0, 7.0]
-		for k in positions.size():
-			var screw_color: int = (int(i) + int(k)) % color_count
-			var screw := {
-				"pos": Vector2(float(positions[k]), i * band_h + band_h * 0.5),
-				"color": screw_color,
-				"plate": i,
-				"hp": 0,
-				"removed": false,
-			}
-			if current_level >= 3 and k == 0 and i % 2 == 0:
-				screw["hp"] = hits_required
-			screws.append(screw)
-			plate["screw_indices"].append(screws.size() - 1)
-	target_score = screws.size() * 100 + plates.size() * 500
-	moves_left = screws.size()
-	_refresh_tools()
+        plates.clear()
+        screws.clear()
+        temp.clear()
+        tools.clear()
+        var plate_count: int = clampi(3 + int(current_level / 3), 3, 9)
+        var color_count := clampi(level_colors, 3, 6)
+        var band_h := 8.0 / float(plate_count)
+        for i in plate_count:
+                var plate := {
+                        "id": i,
+                        "color": i % color_count,
+                        "rect": Rect2(0.35, i * band_h + 0.12, 7.3, band_h - 0.24),
+                        "blocked_by": (i - 1) if i > 0 else -1,
+                        "removed": false,
+                        "fall": 0.0,
+                        "screw_indices": [],
+                }
+                plates.append(plate)
+                var positions: Array = [1.5, 4.0, 6.5]
+                if i % 2 == 1:
+                        positions = [1.0, 3.0, 5.0, 7.0]
+                for k in positions.size():
+                        var screw_color: int = (int(i) + int(k)) % color_count
+                        var screw := {
+                                "pos": Vector2(float(positions[k]), i * band_h + band_h * 0.5),
+                                "color": screw_color,
+                                "plate": i,
+                                "hp": 0,
+                                "removed": false,
+                                "anim": 0.0,
+                        }
+                        if current_level >= 3 and k == 0 and i % 2 == 0:
+                                screw["hp"] = hits_required
+                        screws.append(screw)
+                        plate["screw_indices"].append(screws.size() - 1)
+        target_score = screws.size() * 100 + plates.size() * 500
+        moves_left = screws.size()
+        _refresh_tools()
 
 func is_plate_active(plate) -> bool:
-	var blocker := int(plate.get("blocked_by", -1))
-	if blocker < 0 or blocker >= plates.size():
-		return true
-	return bool(plates[blocker].get("removed", false))
+        var blocker := int(plate.get("blocked_by", -1))
+        if blocker < 0 or blocker >= plates.size():
+                return true
+        return bool(plates[blocker].get("removed", false))
 
 func is_screw_tappable(screw) -> bool:
-	var plate_id := int(screw.get("plate", -1))
-	if plate_id < 0:
-		return true
-	if plate_id >= plates.size():
-		return false
-	var plate = plates[plate_id]
-	if bool(plate.get("removed", false)):
-		return false
-	return is_plate_active(plate)
+        var plate_id := int(screw.get("plate", -1))
+        if plate_id < 0:
+                return true
+        if plate_id >= plates.size():
+                return false
+        var plate = plates[plate_id]
+        if bool(plate.get("removed", false)):
+                return false
+        return is_plate_active(plate)
 
 func _tappable_colors() -> Array[int]:
-	var available: Array[int] = []
-	for screw in screws:
-		if bool(screw.get("removed", false)):
-			continue
-		if is_screw_tappable(screw):
-			var col := int(screw["color"])
-			if not available.has(col):
-				available.append(col)
-	return available
+        var available: Array[int] = []
+        for screw in screws:
+                if bool(screw.get("removed", false)):
+                        continue
+                if is_screw_tappable(screw):
+                        var col := int(screw["color"])
+                        if not available.has(col):
+                                available.append(col)
+        return available
 
 func _refresh_tools() -> void:
-	var available := _tappable_colors()
-	if available.is_empty():
-		return
-	var next_tools: Array[int] = []
-	for col in available:
-		if next_tools.size() >= 3:
-			break
-		next_tools.append(col)
-	var fill := 0
-	while next_tools.size() < 3:
-		if not next_tools.has(fill):
-			next_tools.append(fill)
-		fill += 1
-	tools = next_tools
+        var available := _tappable_colors()
+        if available.is_empty():
+                return
+        var next_tools: Array[int] = []
+        for col in available:
+                if next_tools.size() >= 3:
+                        break
+                next_tools.append(col)
+        var fill := 0
+        while next_tools.size() < 3:
+                if not next_tools.has(fill):
+                        next_tools.append(fill)
+                fill += 1
+        tools = next_tools
 
 func _ensure_tools() -> void:
-	var available := _tappable_colors()
-	for tool in tools:
-		if available.has(tool):
-			return
-	_refresh_tools()
+        var available := _tappable_colors()
+        for tool in tools:
+                if available.has(tool):
+                        return
+        _refresh_tools()
 
 func _remaining_screws() -> int:
-	var count := 0
-	for screw in screws:
-		if not bool(screw.get("removed", false)):
-			count += 1
-	return count
+        var count := 0
+        for screw in screws:
+                if not bool(screw.get("removed", false)):
+                        count += 1
+        return count
 
 func _all_plates_removed() -> bool:
-	for plate in plates:
-		if not bool(plate.get("removed", false)):
-			return false
-	return true
+        for plate in plates:
+                if not bool(plate.get("removed", false)):
+                        return false
+        return true
 
 func _color_matches_tool(color: int, tool_list: Array) -> bool:
-	return tool_list.has(color)
+        return tool_list.has(color)
 
 func score_for_screw() -> int:
-	return 100
+        return 100
 
 func score_for_plate() -> int:
-	return 500
+        return 500
 
 func handle_screw_tap(screw_index: int) -> bool:
-	if screw_index < 0 or screw_index >= screws.size():
-		return false
-	var screw = screws[screw_index]
-	if bool(screw.get("removed", false)):
-		return false
-	if not is_screw_tappable(screw):
-		AudioDirector.play_ui("click")
-		return false
-	var col := int(screw["color"])
-	if int(screw.get("hp", 0)) > 0:
-		screw["hp"] = int(screw["hp"]) - 1
-		score += 25
-		AudioDirector.play_sfx("pop")
-		if int(screw["hp"]) > 0:
-			_after_change()
-			return true
-	screw["removed"] = true
-	if _color_matches_tool(col, tools):
-		score += score_for_screw()
-		AudioDirector.play_sfx("coin")
-	else:
-		if temp.size() >= TEMP_CAPACITY:
-			state = "lost"
-			AudioDirector.play_sfx("lose")
-			StudioUI.show_screen("WinLoseScreen")
-			StudioUI.set_result(false, score, target_score)
-			return false
-		temp.append(col)
-		score += 10
-	_check_plate_completion()
-	_after_change()
-	return true
+        if screw_index < 0 or screw_index >= screws.size():
+                return false
+        var screw = screws[screw_index]
+        if bool(screw.get("removed", false)):
+                return false
+        if not is_screw_tappable(screw):
+                AudioDirector.play_ui("click")
+                return false
+        var col := int(screw["color"])
+        screw["anim"] = 1.0
+        if int(screw.get("hp", 0)) > 0:
+                screw["hp"] = int(screw["hp"]) - 1
+                score += 25
+                AudioDirector.play_sfx("pop")
+                StudioThemeAndVFX.burst_at_screen(board_view, int(screw.get("plate", 0)) * 8 + 1, palette[col % palette.size()])
+                if int(screw["hp"]) > 0:
+                        _after_change()
+                        return true
+        screw["removed"] = true
+        StudioThemeAndVFX.burst_at_screen(board_view, int(screw.get("plate", 0)) * 8 + 1, palette[col % palette.size()])
+        if _color_matches_tool(col, tools):
+                score += score_for_screw()
+                AudioDirector.play_sfx("coin")
+        else:
+                if temp.size() >= TEMP_CAPACITY:
+                        state = "lost"
+                        AudioDirector.play_sfx("lose")
+                        StudioUI.show_screen("WinLoseScreen")
+                        StudioUI.set_result(false, score, target_score)
+                        return false
+                temp.append(col)
+                score += 10
+        _check_plate_completion()
+        _after_change()
+        return true
 
 func _check_plate_completion() -> void:
-	for plate in plates:
-		if bool(plate.get("removed", false)):
-			continue
-		var all_gone := true
-		for index in plate["screw_indices"]:
-			if not bool(screws[int(index)].get("removed", false)):
-				all_gone = false
-				break
-		if all_gone:
-			plate["removed"] = true
-			score += score_for_plate()
-			AudioDirector.play_sfx("win")
-			var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
-			if cam != null:
-				StudioThemeAndVFX.pulse_camera_feedback(cam, 0.08)
-			_refresh_tools()
-	if _all_plates_removed() and state == "playing":
-		state = "won"
-		StudioUI.show_screen("WinLoseScreen")
-		StudioUI.set_result(true, score, target_score)
-		AnalyticsManager.record_event("level_won", {"level": current_level, "score": score})
+        for plate in plates:
+                if bool(plate.get("removed", false)):
+                        continue
+                var all_gone := true
+                for index in plate["screw_indices"]:
+                        if not bool(screws[int(index)].get("removed", false)):
+                                all_gone = false
+                                break
+                if all_gone:
+                        plate["removed"] = true
+                        plate["fall"] = 0.0
+                        score += score_for_plate()
+                        AudioDirector.play_sfx("win")
+                        var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
+                        if cam != null:
+                                StudioThemeAndVFX.pulse_camera_feedback(cam, 0.08)
+                        _refresh_tools()
+        if _all_plates_removed() and state == "playing":
+                state = "won"
+                var stars := 1
+                if score >= int(target_score * 1.5):
+                        stars = 3
+                elif score >= int(target_score * 1.2):
+                        stars = 2
+                var level_stars: Dictionary = SaveManager.data.get("level_stars", {})
+                level_stars[str(current_level)] = stars
+                SaveManager.data["level_stars"] = level_stars
+                SaveManager.data["highest_level"] = maxi(int(SaveManager.data.get("highest_level", 1)), mini(current_level + 1, 30))
+                SaveManager.save_game()
+                StudioUI.show_screen("WinLoseScreen")
+                StudioUI.set_result(true, score, target_score)
+                AnalyticsManager.record_event("level_won", {"level": current_level, "score": score, "stars": stars})
 
 func _after_change() -> void:
-	moves_left = _remaining_screws()
-	_ensure_tools()
-	StudioUI.update_hud(current_level, score, moves_left, target_score)
-	if board_view != null:
-		board_view.queue_redraw()
+        moves_left = _remaining_screws()
+        _ensure_tools()
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
+        if board_view != null:
+                board_view.queue_redraw()
 
 func bot_play_step() -> void:
-	if state != "playing":
-		if state == "won":
-			load_level(min(current_level + 1, 30))
-		elif state == "lost":
-			load_level(current_level)
-		return
-	var chosen := -1
-	for i in screws.size():
-		var screw = screws[i]
-		if bool(screw.get("removed", false)) or not is_screw_tappable(screw):
-			continue
-		if _color_matches_tool(int(screw["color"]), tools):
-			chosen = i
-			if int(screw.get("hp", 0)) > 0:
-				break
-	if chosen < 0:
-		for i in screws.size():
-			var screw = screws[i]
-			if not bool(screw.get("removed", false)) and is_screw_tappable(screw):
-				chosen = i
-				break
-	if chosen >= 0:
-		if temp.size() >= TEMP_CAPACITY:
-			temp.clear()
-		handle_screw_tap(chosen)
-	elif _remaining_screws() == 0:
-		state = "won"
-		StudioUI.show_screen("WinLoseScreen")
-		StudioUI.set_result(true, score, target_score)
+        if state != "playing":
+                if state == "won":
+                        load_level(mini(current_level + 1, 30))
+                elif state == "lost":
+                        load_level(current_level)
+                return
+        var chosen := -1
+        for i in screws.size():
+                var screw = screws[i]
+                if bool(screw.get("removed", false)) or not is_screw_tappable(screw):
+                        continue
+                if _color_matches_tool(int(screw["color"]), tools):
+                        chosen = i
+                        if int(screw.get("hp", 0)) > 0:
+                                break
+        if chosen < 0:
+                for i in screws.size():
+                        var screw = screws[i]
+                        if not bool(screw.get("removed", false)) and is_screw_tappable(screw):
+                                chosen = i
+                                break
+        if chosen >= 0:
+                if temp.size() >= TEMP_CAPACITY:
+                        temp.clear()
+                handle_screw_tap(chosen)
+        elif _remaining_screws() == 0:
+                state = "won"
+                StudioUI.show_screen("WinLoseScreen")
+                StudioUI.set_result(true, score, target_score)
 
 func handle_tap(idx: int) -> void:
-	handle_screw_tap(idx)
+        handle_screw_tap(idx)
+
+func use_booster(kind: String) -> bool:
+        var boosters: Dictionary = SaveManager.data.get("boosters", {})
+        if int(boosters.get(kind, 0)) <= 0:
+                return false
+        match kind:
+                "hammer":
+                        var chosen := -1
+                        for i in screws.size():
+                                var screw = screws[i]
+                                if not bool(screw.get("removed", false)) and is_screw_tappable(screw):
+                                        chosen = i
+                                        break
+                        if chosen < 0:
+                                return false
+                        var col := int(screws[chosen]["color"])
+                        screws[chosen]["removed"] = true
+                        screws[chosen]["anim"] = 1.0
+                        StudioThemeAndVFX.burst_at_screen(board_view, int(screws[chosen].get("plate", 0)) * 8 + 1, palette[col % palette.size()])
+                        SaveManager.add_booster(kind, -1)
+                        _check_plate_completion()
+                        _after_change()
+                        return true
+                "shuffle":
+                        _refresh_tools()
+                        SaveManager.add_booster(kind, -1)
+                        _after_change()
+                        return true
+                "swap":
+                        if not temp.is_empty():
+                                temp.pop_front()
+                        SaveManager.add_booster(kind, -1)
+                        _after_change()
+                        return true
+        return false
+
+func add_moves(amount: int) -> void:
+        moves_left += amount
+        if state == "lost":
+                state = "playing"
+                StudioUI.show_screen("GameplayHUD")
+        StudioUI.update_hud(current_level, score, moves_left, target_score)
 
 func apply_hit_to_target(target) -> int:
-	var hp := hits_required
-	if typeof(target) == TYPE_DICTIONARY and target.has("hp"):
-		hp = int(target["hp"])
-	hp -= 1
-	if typeof(target) == TYPE_DICTIONARY:
-		target["hp"] = hp
-		target["state"] = "popped" if hp <= 0 else ("cracked_%d" % hp)
-	return hp
+        var hp := hits_required
+        if typeof(target) == TYPE_DICTIONARY and target.has("hp"):
+                hp = int(target["hp"])
+        hp -= 1
+        if typeof(target) == TYPE_DICTIONARY:
+                target["hp"] = hp
+                target["state"] = "popped" if hp <= 0 else ("cracked_%d" % hp)
+        return hp
 
 func step_mechanics_lab_test() -> String:
-	var lines: Array[String] = []
-	lines.append("[ARMOR_ORACLE] Four-hit rusted bolt progression:")
-	var hp := hits_required
-	while hp > 0:
-		var next_hp := hp - 1
-		if next_hp > 0:
-			lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
-		else:
-			lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
-		hp = next_hp
-	lines.append("[SCREW_ORACLE] Same-color screw clears only with matching tool; wrong color uses a temp slot.")
-	lines.append("[SCREW_ORACLE] Blocked plate order enforced; plate unlocks only after its blocker falls.")
-	lines.append("[SCREW_ORACLE] Scoring math: screw=100, plate=500, rusted hit=25 verified.")
-	return "\n".join(lines)
+        var lines: Array[String] = []
+        lines.append("[ARMOR_ORACLE] Four-hit rusted bolt progression:")
+        var hp := hits_required
+        while hp > 0:
+                var next_hp := hp - 1
+                if next_hp > 0:
+                        lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
+                else:
+                        lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
+                hp = next_hp
+        lines.append("[SCREW_ORACLE] Same-color screw clears only with matching tool; wrong color uses a temp slot.")
+        lines.append("[SCREW_ORACLE] Blocked plate order enforced; plate unlocks only after its blocker falls.")
+        lines.append("[SCREW_ORACLE] Scoring math: screw=100, plate=500, rusted hit=25 verified.")
+        lines.append("[SPECIAL_ORACLE] " + AIExtension.get_special_rule())
+        return "\n".join(lines)
 
 func run_self_test() -> bool:
-	var ok := true
-	ok = ok and _color_matches_tool(0, [0, 1, 2])
-	ok = ok and not _color_matches_tool(3, [0, 1, 2])
-	var saved_plates := plates
-	var saved_screws := screws
-	plates = [
-		{"id": 0, "removed": false, "blocked_by": -1},
-		{"id": 1, "removed": false, "blocked_by": 0},
-	]
-	ok = ok and is_plate_active(plates[0])
-	ok = ok and not is_plate_active(plates[1])
-	plates[0]["removed"] = true
-	ok = ok and is_plate_active(plates[1])
-	plates = saved_plates
-	screws = saved_screws
-	ok = ok and score_for_screw() == 100 and score_for_plate() == 500
-	var target := {"hp": 4}
-	for i in 4:
-		apply_hit_to_target(target)
-	ok = ok and int(target["hp"]) == 0 and str(target.get("state", "")) == "popped"
-	return ok
+        var ok := true
+        ok = ok and _color_matches_tool(0, [0, 1, 2])
+        ok = ok and not _color_matches_tool(3, [0, 1, 2])
+        var saved_plates := plates
+        var saved_screws := screws
+        plates = [
+                {"id": 0, "removed": false, "blocked_by": -1},
+                {"id": 1, "removed": false, "blocked_by": 0},
+        ]
+        ok = ok and is_plate_active(plates[0])
+        ok = ok and not is_plate_active(plates[1])
+        plates[0]["removed"] = true
+        ok = ok and is_plate_active(plates[1])
+        plates = saved_plates
+        screws = saved_screws
+        ok = ok and score_for_screw() == 100 and score_for_plate() == 500
+        var target := {"hp": 4}
+        for i in 4:
+                apply_hit_to_target(target)
+        ok = ok and int(target["hp"]) == 0 and str(target.get("state", "")) == "popped"
+        return ok
 
 func test_stitched_chunks(chunks: Array) -> bool:
-	return chunks.size() > 0
+        return chunks.size() > 0
 
 func load_single_chunk(chunk_id: int) -> void:
-	load_level(chunk_id)
+        load_level(chunk_id)
 
 func pulse_camera_feedback(cam: Camera3D, amount: float) -> void:
-	StudioThemeAndVFX.pulse_camera_feedback(cam, amount)
+        StudioThemeAndVFX.pulse_camera_feedback(cam, amount)
 
 func get_snapshot() -> Dictionary:
-	return {
-		"genre": genre,
-		"level": current_level,
-		"score": score,
-		"screws_left": moves_left,
-		"plates_left": plates.size(),
-		"state": state,
-		"tools": tools.duplicate(),
-	}
+        var plate_view: Array = []
+        for plate in plates:
+                var rect: Rect2 = plate["rect"]
+                plate_view.append({
+                        "id": int(plate["id"]),
+                        "color": int(plate["color"]),
+                        "blocked_by": int(plate["blocked_by"]),
+                        "removed": bool(plate["removed"]),
+                        "rect": [rect.position.x, rect.position.y, rect.size.x, rect.size.y],
+                })
+        var screw_view: Array = []
+        for screw in screws:
+                var pos: Vector2 = screw["pos"]
+                screw_view.append({
+                        "pos": [pos.x, pos.y],
+                        "color": int(screw["color"]),
+                        "plate": int(screw["plate"]),
+                        "hp": int(screw["hp"]),
+                        "removed": bool(screw["removed"]),
+                })
+        return {
+                "genre": genre,
+                "level": current_level,
+                "score": score,
+                "moves_left": moves_left,
+                "target_score": target_score,
+                "state": state,
+                "tools": tools.duplicate(),
+                "temp": temp.duplicate(),
+                "plates": plate_view,
+                "screws": screw_view,
+        }
 
 func cleanup_qa_runtime_objects() -> void:
-	for child in get_children():
-		if str(child.name).begins_with("QATemp"):
-			child.queue_free()
+        for child in get_children():
+                if str(child.name).begins_with("QATemp"):
+                        child.queue_free()

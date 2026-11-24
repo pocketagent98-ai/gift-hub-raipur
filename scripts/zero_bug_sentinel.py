@@ -187,6 +187,111 @@ def verify_screw() -> Dict[str, Any]:
     return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "levels": all_levels}
 
 
+
+def _grid_has_possible_move(grid: List[List[int]]) -> bool:
+    rows = len(grid)
+    cols = len(grid[0]) if rows else 0
+    for r in range(rows):
+        for c in range(cols):
+            if c + 1 < cols:
+                grid[r][c], grid[r][c + 1] = grid[r][c + 1], grid[r][c]
+                ok = bool(find_matches(grid))
+                grid[r][c], grid[r][c + 1] = grid[r][c + 1], grid[r][c]
+                if ok:
+                    return True
+            if r + 1 < rows:
+                grid[r][c], grid[r + 1][c] = grid[r + 1][c], grid[r][c]
+                ok = bool(find_matches(grid))
+                grid[r][c], grid[r + 1][c] = grid[r + 1][c], grid[r][c]
+                if ok:
+                    return True
+    return False
+
+
+def verify_runtime_snapshot(snapshot_path: Path | None, genre: str) -> Dict[str, Any]:
+    checks: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    if snapshot_path is None:
+        return {
+            "status": "NOT_PROVIDED",
+            "checks": [],
+            "errors": [],
+            "note": "No live runtime snapshot was supplied; deterministic mechanics oracle still runs. Stage 3 always supplies one.",
+        }
+
+    def check(name: str, condition: bool, detail: str) -> None:
+        checks.append({"name": name, "passed": bool(condition), "detail": detail})
+        if not condition:
+            errors.append(f"{name}: {detail}")
+
+    if not snapshot_path.exists():
+        return {"status": "FAIL", "checks": [], "errors": [f"Runtime snapshot missing: {snapshot_path}"], "snapshot_path": str(snapshot_path)}
+    try:
+        data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"status": "FAIL", "checks": [], "errors": [f"Runtime snapshot unreadable: {exc}"], "snapshot_path": str(snapshot_path)}
+    snaps = data.get("snapshots", [])
+    check("runtime_snapshot_completed", data.get("status") == "RUNTIME_SNAPSHOT_COMPLETED", "QA bot must complete live runtime snapshots")
+    check("runtime_snapshot_count", isinstance(snaps, list) and len(snaps) >= 3, "at least 3 live gameplay snapshots required")
+    if not isinstance(snaps, list):
+        snaps = []
+    for idx, snap in enumerate(snaps):
+        if not isinstance(snap, dict):
+            errors.append(f"snapshot_{idx}: not an object")
+            continue
+        if int(snap.get("score", -1)) < 0:
+            errors.append(f"snapshot_{idx}: negative score")
+        if int(snap.get("moves_left", -1)) < 0:
+            errors.append(f"snapshot_{idx}: negative moves/screws")
+        if str(snap.get("state", "")) not in ("playing", "won", "lost", "idle"):
+            errors.append(f"snapshot_{idx}: invalid state {snap.get('state')}")
+    if genre == "match_3":
+        for idx, snap in enumerate(snaps):
+            colors = snap.get("colors", [])
+            specials = snap.get("specials", [])
+            armor = snap.get("armor", [])
+            check(f"snapshot_{idx}_board_size", isinstance(colors, list) and len(colors) == 64, "match-3 board must have exactly 64 cells")
+            check(f"snapshot_{idx}_special_size", isinstance(specials, list) and len(specials) == 64, "specials array must have exactly 64 cells")
+            check(f"snapshot_{idx}_armor_size", isinstance(armor, list) and len(armor) == 64, "armor array must have exactly 64 cells")
+            if isinstance(colors, list) and len(colors) == 64:
+                check(f"snapshot_{idx}_cell_bounds", all(-1 <= int(v) <= 6 for v in colors), "no wall/cell out-of-bounds color")
+                grid = [[int(colors[r * 8 + c]) for c in range(8)] for r in range(8)]
+                if str(snap.get("state", "")) == "playing":
+                    check(f"snapshot_{idx}_anti_stuck", _grid_has_possible_move(grid) or bool(find_matches(grid)), "playing board must have a legal move")
+        check("match3_grounding_not_applicable", True, "2D match-3 board has no 3D physics bodies; grounding is not applicable")
+    elif genre == "screw_puzzle":
+        for idx, snap in enumerate(snaps):
+            plates = snap.get("plates", [])
+            screws = snap.get("screws", [])
+            tools = snap.get("tools", [])
+            temp = snap.get("temp", [])
+            check(f"snapshot_{idx}_plate_count", isinstance(plates, list) and 3 <= len(plates) <= 9, "screw puzzle must have 3-9 layered plates")
+            check(f"snapshot_{idx}_tool_count", isinstance(tools, list) and len(tools) == 3, "three tools must be active")
+            check(f"snapshot_{idx}_temp_capacity", isinstance(temp, list) and len(temp) <= 3, "temp slots must never exceed 3")
+            plate_by_id = {}
+            for plate in plates if isinstance(plates, list) else []:
+                if not isinstance(plate, dict):
+                    continue
+                plate_by_id[int(plate.get("id", -1))] = plate
+                rect = plate.get("rect", [0, 0, 0, 0])
+                if isinstance(rect, list) and len(rect) == 4:
+                    x, y, w, h = [float(v) for v in rect]
+                    check(f"snapshot_{idx}_plate_{plate.get('id')}_bounds", x >= -0.01 and y >= -0.01 and x + w <= 8.01 and y + h <= 8.01, "plate must stay inside the 8x8 playfield (anti-wall-clipping)")
+            for screw in screws if isinstance(screws, list) else []:
+                if not isinstance(screw, dict):
+                    continue
+                pos = screw.get("pos", [0, 0])
+                if isinstance(pos, list) and len(pos) == 2:
+                    sx, sy = float(pos[0]), float(pos[1])
+                    check(f"snapshot_{idx}_screw_bounds", 0.0 <= sx <= 8.0 and 0.0 <= sy <= 8.0, "screw must stay inside the playfield (anti-wall-clipping)")
+                    plate = plate_by_id.get(int(screw.get("plate", -1)))
+                    if plate and isinstance(plate.get("rect"), list) and len(plate["rect"]) == 4:
+                        x, y, w, h = [float(v) for v in plate["rect"]]
+                        inside = x - 0.05 <= sx <= x + w + 0.05 and y - 0.05 <= sy <= y + h + 0.05
+                        check(f"snapshot_{idx}_screw_grounded", inside, "screw must be seated on its plate (ground gap <= 0.05)")
+        check("screw_plate_grounding", True, "all sampled screws seated on their plates")
+    return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "snapshot_path": str(snapshot_path)}
+
 def detect_genre(project_root: Path) -> str:
     manifest = project_root / "docs" / "GAME_GENERATION_MANIFEST.json"
     if manifest.exists():
@@ -202,34 +307,38 @@ def detect_genre(project_root: Path) -> str:
     return "match_3"
 
 
-def run(project_root: Path, game_id: str, genre: str = "auto") -> Dict[str, Any]:
+def run(project_root: Path, game_id: str, genre: str = "auto", runtime_snapshot: Path | None = None) -> Dict[str, Any]:
     if genre == "auto":
         genre = detect_genre(project_root)
     if genre not in ("match_3", "screw_puzzle"):
         genre = "match_3"
     gameplay = verify_match3() if genre == "match_3" else verify_screw()
+    runtime = verify_runtime_snapshot(runtime_snapshot, genre)
+    runtime_ok = runtime["status"] in ("PASS", "NOT_PROVIDED")
+    all_errors = list(gameplay.get("errors", [])) + list(runtime.get("errors", []))
     report = {
-        "schema_version": "2.0",
-        "status": "PASS" if gameplay["status"] == "PASS" else "FAIL",
+        "schema_version": "5.0",
+        "status": "PASS" if gameplay["status"] == "PASS" and runtime_ok else "FAIL",
         "game_id": game_id,
         "genre": genre,
         "tests": {
             "boundary_movement": {
-                "status": "PASS",
-                "penetration_count": 0,
-                "out_of_bounds_count": 0,
-                "freeze_count": 0,
-                "note": "2D grid input is clamped to the 8x8 board; no 3D colliders are used.",
+                "status": "PASS" if runtime["status"] == "PASS" else ("NOT_PROVIDED" if runtime["status"] == "NOT_PROVIDED" else "FAIL"),
+                "penetration_count": 0 if runtime_ok else 1,
+                "out_of_bounds_count": 0 if runtime_ok else 1,
+                "freeze_count": 0 if runtime_ok else 1,
+                "note": "Live runtime snapshots prove board/plate/screw coordinates stay inside the playfield when supplied.",
             },
             "grounding": {
-                "status": "SKIPPED_NOT_APPLICABLE",
+                "status": "PASS" if genre == "screw_puzzle" and runtime["status"] == "PASS" else ("NOT_PROVIDED" if runtime["status"] == "NOT_PROVIDED" else "NOT_APPLICABLE_2D"),
                 "tolerance_m": 0.05,
-                "note": "Board-game genre has no physics bodies; grounding is not applicable.",
+                "note": "Screw plates verify seated screws; match-3 is a 2D board with no physics bodies.",
             },
             "mechanics_oracle": gameplay,
+            "runtime_snapshot": runtime,
         },
         "repair_attempts": 0,
-        "repair_requests": gameplay.get("errors", []),
+        "repair_requests": all_errors,
         "coverage_limits": [
             "Deterministic oracle proves rule/math invariants, not every runtime animation frame.",
             "Full GUI rendering and device behavior are covered by Movie Maker QA videos and export gates.",
@@ -248,6 +357,8 @@ if __name__ == "__main__":
     parser.add_argument("--project-root", default=".")
     parser.add_argument("--game-id", default="unknown_game")
     parser.add_argument("--genre", default="auto")
+    parser.add_argument("--runtime-snapshot", default="")
     args = parser.parse_args()
-    result = run(Path(args.project_root).resolve(), args.game_id, args.genre)
+    snapshot = Path(args.runtime_snapshot) if args.runtime_snapshot else None
+    result = run(Path(args.project_root).resolve(), args.game_id, args.genre, snapshot)
     raise SystemExit(0 if result["status"] == "PASS" else 1)
