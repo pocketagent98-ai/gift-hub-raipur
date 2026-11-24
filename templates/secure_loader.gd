@@ -1,6 +1,7 @@
 extends Node
 
-const VAULT_PATH := "res://assets/secure/config_vault.enc"
+const VAULT_DIR := "res://assets/secure/"
+const VAULT_FILE := "config_vault.enc"
 const MAGIC := "STUDIOV1"
 
 var _config: Dictionary = {}
@@ -10,10 +11,11 @@ func _ready() -> void:
         load_secure_vault()
 
 func load_secure_vault() -> bool:
-        if not FileAccess.file_exists(VAULT_PATH):
+        var vault_path := VAULT_DIR + VAULT_FILE
+        if not FileAccess.file_exists(vault_path):
                 _loaded = true
                 return false
-        var f := FileAccess.open(VAULT_PATH, FileAccess.READ)
+        var f := FileAccess.open(vault_path, FileAccess.READ)
         if f == null:
                 push_warning("[SECURE_LOADER] Unable to open encrypted config vault.")
                 _loaded = true
