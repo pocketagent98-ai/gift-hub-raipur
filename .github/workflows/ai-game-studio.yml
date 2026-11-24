@@ -199,12 +199,18 @@ jobs:
           df -h /
 
       - name: "Boot virtual screen + audio FIRST, then install bounded deps"
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: |
-          sudo apt-get update
+          sudo apt-get update -o Acquire::Retries=5
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb pulseaudio ffmpeg imagemagick libgl1-mesa-dri libglu1-mesa \
+            xvfb pulseaudio pulseaudio-utils libgl1-mesa-dri libglu1-mesa \
             libxcursor1 libxinerama1 libxi6 libxrandr2
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
+          fi
+          if ! command -v montage >/dev/null; then
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imagemagick
+          fi
           export XDG_RUNTIME_DIR=/tmp/runtime-runner
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
@@ -368,12 +374,21 @@ jobs:
           df -h /
 
       - name: "Boot virtual screen + audio FIRST, then install release deps"
-        timeout-minutes: 9
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
+          sudo apt-get update -o Acquire::Retries=5
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            xvfb pulseaudio ffmpeg imagemagick libgl1-mesa-dri libglu1-mesa \
-            libxcursor1 libxinerama1 libxi6 libxrandr2 openjdk-17-jdk
+            xvfb pulseaudio pulseaudio-utils libgl1-mesa-dri libglu1-mesa \
+            libxcursor1 libxinerama1 libxi6 libxrandr2
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
+          fi
+          if ! command -v montage >/dev/null; then
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imagemagick
+          fi
+          if ! command -v java >/dev/null; then
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk
+          fi
           export XDG_RUNTIME_DIR=/tmp/runtime-runner
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
