@@ -28,15 +28,26 @@ func _build_overlay() -> void:
 	_backdrop.visible = false
 	_overlay.add_child(_backdrop)
 
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_backdrop.add_child(center)
+
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_panel.custom_minimum_size = Vector2(560, 360)
-	_backdrop.add_child(_panel)
+	var ad_style := StyleBoxFlat.new()
+	ad_style.bg_color = Color(0.06, 0.05, 0.12, 0.97)
+	ad_style.border_color = Color(0.45, 0.85, 1.0, 0.95)
+	ad_style.set_border_width_all(4)
+	ad_style.set_corner_radius_all(22)
+	_panel.add_theme_stylebox_override("panel", ad_style)
+	center.add_child(_panel)
 
 	_label = Label.new()
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_label.add_theme_font_size_override("font_size", 34)
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.custom_minimum_size = Vector2(520, 0)
+	_label.add_theme_font_size_override("font_size", 32)
 	_label.text = "SIMULATED AD"
 	_panel.add_child(_label)
 
