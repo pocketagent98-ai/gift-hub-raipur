@@ -1,542 +1,215 @@
 extends Node
 
-const AIExtension = preload("res://scripts/ai_gameplay_extension.gd")
-const BOARD := 8
-const CELLS := 64
-const hits_required := 4
-const PALETTE := [
-        Color(0.96, 0.30, 0.38),
-        Color(0.30, 0.62, 0.98),
-        Color(0.34, 0.86, 0.52),
-        Color(0.98, 0.78, 0.22),
-        Color(0.72, 0.42, 0.96),
-        Color(0.24, 0.86, 0.88),
+# ==============================================================================
+# COMMERCIAL-GRADE 8x8 MATCH-3 CRYSTAL ENGINE (V6.0 — GENRE: match_3)
+# ==============================================================================
+
+signal level_changed(new_level: int)
+signal score_changed(new_score: int, combo: int)
+signal board_updated(lines_cleared: int)
+signal state_changed()
+signal level_completed(lvl: int, final_score: int)
+signal game_over(final_score: int)
+
+const GENRE: String = "match_3"
+const GAME_TITLE: String = "__GAME_TITLE__"
+const BOARD_SIZE: int = 8
+
+const PALETTE: Array[Color] = [
+	Color(0.0, 0.0, 0.0, 0.0),
+	Color(0.98, 0.30, 0.40),
+	Color(1.00, 0.72, 0.16),
+	Color(0.22, 0.86, 0.50),
+	Color(0.20, 0.70, 1.00),
+	Color(0.72, 0.40, 1.00),
+	Color(1.00, 0.44, 0.80),
 ]
 
-var genre := "match_3"
-var state := "idle"
-var current_level := 1
-var score := 0
-var moves_left := 0
-var target_score := 0
-var combo := 0
-var selected := -1
-var swap_mode := false
-var level_colors := 4
-var colors: Array[int] = []
-var armor: Array[int] = []
-var specials: Array[int] = []
-var palette: Array = PALETTE
-var board_view: Control
-var board_layer: CanvasLayer
-var rng := RandomNumberGenerator.new()
+var current_level: int = 1
+var level_goal: int = 400
+var moves_left: int = 20
+var moves_made: int = 0
+var current_score: int = 0
+var best_score: int = 0
+var current_combo: int = 0
+var grid_8x8: Array = []
+var selected_cell: Vector2i = Vector2i(-1, -1)
+var last_cleared_cells: Array = []
+var last_popup_text: String = ""
+var last_popup_grid_pos: Vector2i = Vector2i(4, 4)
+var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
-        colors.resize(CELLS)
-        armor.resize(CELLS)
-        specials.resize(CELLS)
-        rng.randomize()
-        _build_board_layer()
-        set_board_visible(false)
+	_rng.randomize()
+	load_level(1)
 
-func _build_board_layer() -> void:
-        board_layer = CanvasLayer.new()
-        board_layer.name = "BoardLayer"
-        board_layer.layer = 5
-        add_child(board_layer)
-        board_view = preload("res://scripts/board_view.gd").new()
-        board_view.name = "BoardView"
-        board_view.manager = self
-        board_view.set_anchors_preset(Control.PRESET_FULL_RECT)
-        board_layer.add_child(board_view)
+func load_level(lvl_num: int) -> void:
+	current_level = clampi(lvl_num, 1, 30)
+	level_goal = 360 + (current_level - 1) * 140
+	moves_left = max(14, 24 - int(current_level / 4))
+	moves_made = 0
+	current_score = 0
+	current_combo = 0
+	selected_cell = Vector2i(-1, -1)
+	last_cleared_cells.clear()
+	_generate_playable_board()
+	emit_signal("level_changed", current_level)
+	emit_signal("score_changed", current_score, current_combo)
+	emit_signal("state_changed")
 
-func set_board_visible(value: bool) -> void:
-        if board_layer != null:
-                board_layer.visible = value
+func _generate_playable_board() -> void:
+	grid_8x8.clear()
+	var color_count := mini(6, 4 + int(current_level / 6))
+	for r in range(BOARD_SIZE):
+		var row: Array = []
+		for c in range(BOARD_SIZE):
+			var col := _rng.randi_range(1, color_count)
+			while (c >= 2 and int(row[c - 1]) == col and int(row[c - 2]) == col) or (r >= 2 and int(grid_8x8[r - 1][c]) == col and int(grid_8x8[r - 2][c]) == col):
+				col = (col % color_count) + 1
+			row.append(col)
+		grid_8x8.append(row)
+	if find_first_valid_swap().is_empty():
+		grid_8x8[0][0] = 1
+		grid_8x8[0][1] = 1
+		grid_8x8[1][2] = 1
 
-func load_level(level_num: int) -> void:
-        current_level = clampi(level_num, 1, 30)
-        score = 0
-        combo = 0
-        selected = -1
-        swap_mode = false
-        var tuning: Dictionary = AIExtension.get_level_tuning(current_level)
-        target_score = int(tuning.get("target_score", 250 + current_level * 70))
-        moves_left = int(tuning.get("moves", 18 + mini(current_level, 12)))
-        level_colors = int(tuning.get("colors", 4 if current_level < 3 else (5 if current_level < 12 else 6)))
-        rng.seed = int(hash(AppConfig.GAME_ID + ":match3:" + str(current_level)))
-        _generate_board()
-        if not has_possible_move():
-                reshuffle()
-        state = "playing"
-        SaveManager.set_level(current_level)
-        StudioUI.show_screen("GameplayHUD")
-        StudioUI.update_hud(current_level, score, moves_left, target_score)
-        set_board_visible(true)
-        if board_view != null:
-                board_view.queue_redraw()
-        AnalyticsManager.record_event("level_started", {"level": current_level, "genre": genre})
+func try_swap(a: Vector2i, b: Vector2i) -> Dictionary:
+	if abs(a.x - b.x) + abs(a.y - b.y) != 1:
+		return {"swapped": false}
+	if a.x < 0 or a.x >= BOARD_SIZE or a.y < 0 or a.y >= BOARD_SIZE:
+		return {"swapped": false}
+	if b.x < 0 or b.x >= BOARD_SIZE or b.y < 0 or b.y >= BOARD_SIZE:
+		return {"swapped": false}
 
-func _generate_board() -> void:
-        var color_count := _color_count()
-        for r in BOARD:
-                for c in BOARD:
-                        var idx := r * BOARD + c
-                        var col := rng.randi_range(0, color_count - 1)
-                        var guard := 0
-                        while guard < 40 and _would_match_at(idx, col):
-                                col = rng.randi_range(0, color_count - 1)
-                                guard += 1
-                        colors[idx] = col
-                        armor[idx] = 0
-                        specials[idx] = 0
-        var armored_count := 0
-        if current_level >= 3:
-                armored_count = mini(2 + int(current_level / 3), 12)
-        for i in armored_count:
-                var idx := rng.randi_range(0, CELLS - 1)
-                armor[idx] = hits_required
+	var tmp: int = int(grid_8x8[a.y][a.x])
+	grid_8x8[a.y][a.x] = grid_8x8[b.y][b.x]
+	grid_8x8[b.y][b.x] = tmp
 
-func _color_count() -> int:
-        return clampi(level_colors, 4, 6)
+	var matches := _find_matches()
+	if matches.is_empty():
+		grid_8x8[b.y][b.x] = grid_8x8[a.y][a.x]
+		grid_8x8[a.y][a.x] = tmp
+		var aud_inv := get_node_or_null("/root/AudioDirector")
+		if aud_inv != null:
+			aud_inv.call("play_sfx", "invalid")
+		return {"swapped": false}
 
-func _would_match_at(idx: int, col: int) -> bool:
-        var r := int(idx / BOARD)
-        var c := idx % BOARD
-        if c >= 2 and colors[idx - 1] == col and colors[idx - 2] == col:
-                return true
-        if r >= 2 and colors[idx - BOARD] == col and colors[idx - BOARD * 2] == col:
-                return true
-        return false
+	moves_left -= 1
+	moves_made += 1
+	current_combo = 0
+	var total_cleared := 0
+	var total_pts := 0
+	last_cleared_cells.clear()
 
-func find_match_groups() -> Array:
-        var groups: Array = []
-        for r in BOARD:
-                var c := 0
-                while c < BOARD:
-                        var col := colors[r * BOARD + c]
-                        if col < 0:
-                                c += 1
-                                continue
-                        var end := c + 1
-                        while end < BOARD and colors[r * BOARD + end] == col:
-                                end += 1
-                        if end - c >= 3:
-                                var group: Array = []
-                                for k in range(c, end):
-                                        group.append(r * BOARD + k)
-                                groups.append(group)
-                        c = end
-        for c in BOARD:
-                var r := 0
-                while r < BOARD:
-                        var col := colors[r * BOARD + c]
-                        if col < 0:
-                                r += 1
-                                continue
-                        var end := r + 1
-                        while end < BOARD and colors[end * BOARD + c] == col:
-                                end += 1
-                        if end - r >= 3:
-                                var group: Array = []
-                                for k in range(r, end):
-                                        group.append(k * BOARD + c)
-                                groups.append(group)
-                        r = end
-        return groups
+	while not matches.is_empty():
+		current_combo = mini(8, current_combo + 1)
+		for m_pos in matches:
+			var p: Vector2i = m_pos
+			last_cleared_cells.append({"pos": p, "color_id": int(grid_8x8[p.y][p.x])})
+			grid_8x8[p.y][p.x] = 0
+		total_cleared += matches.size()
+		total_pts += matches.size() * 40 * current_combo
+		_apply_gravity_and_refill()
+		matches = _find_matches()
 
-func _is_horizontal(group: Array) -> bool:
-        if group.size() < 2:
-                return true
-        var row := int(group[0]) / BOARD
-        for idx in group:
-                if int(idx) / BOARD != row:
-                        return false
-        return true
+	current_score += total_pts
+	if current_score > best_score:
+		best_score = current_score
+	last_popup_text = "+%d  x%d" % [total_pts, current_combo]
+	last_popup_grid_pos = b
 
-func _swap_raw(a: int, b: int) -> void:
-        var tmp := colors[a]
-        colors[a] = colors[b]
-        colors[b] = tmp
+	var aud := get_node_or_null("/root/AudioDirector")
+	if aud != null:
+		aud.call("play_sfx", "match", current_combo)
 
-func _swap_full(a: int, b: int) -> void:
-        var tmp := colors[a]
-        colors[a] = colors[b]
-        colors[b] = tmp
-        var armor_tmp := armor[a]
-        armor[a] = armor[b]
-        armor[b] = armor_tmp
-        var special_tmp := specials[a]
-        specials[a] = specials[b]
-        specials[b] = special_tmp
+	selected_cell = Vector2i(-1, -1)
+	emit_signal("score_changed", current_score, current_combo)
+	emit_signal("board_updated", total_cleared)
+	emit_signal("state_changed")
 
-func _are_adjacent(a: int, b: int) -> bool:
-        var ar := int(a / BOARD)
-        var ac := a % BOARD
-        var br := int(b / BOARD)
-        var bc := b % BOARD
-        return absi(ar - br) + absi(ac - bc) == 1
+	if current_score >= level_goal:
+		var save_mgr := get_node_or_null("/root/SaveManager")
+		if save_mgr != null:
+			save_mgr.call("add_coins", 50)
+		if aud != null:
+			aud.call("play_sfx", "victory", 5)
+		emit_signal("level_completed", current_level, current_score)
+	elif moves_left <= 0:
+		emit_signal("game_over", current_score)
 
-func swap_cells(a: int, b: int) -> bool:
-        if a < 0 or b < 0 or a >= CELLS or b >= CELLS:
-                return false
-        if not _are_adjacent(a, b):
-                return false
-        _swap_full(a, b)
-        if find_match_groups().is_empty():
-                _swap_full(a, b)
-                return false
-        moves_left -= 1
-        _resolve_board()
-        _after_turn()
-        return true
+	return {"swapped": true, "cleared": total_cleared, "score_gained": total_pts}
 
-func swap_any_cells(a: int, b: int) -> bool:
-        if a < 0 or b < 0 or a >= CELLS or b >= CELLS or a == b:
-                return false
-        _swap_full(a, b)
-        if find_match_groups().is_empty():
-                _swap_full(a, b)
-                return false
-        moves_left -= 1
-        _resolve_board()
-        _after_turn()
-        return true
+func _find_matches() -> Array:
+	var hit: Dictionary = {}
+	for r in range(BOARD_SIZE):
+		var run_col := int(grid_8x8[r][0])
+		var run_start := 0
+		for c in range(1, BOARD_SIZE + 1):
+			var cur := int(grid_8x8[r][c]) if c < BOARD_SIZE else -1
+			if cur == run_col and run_col > 0:
+				continue
+			if c - run_start >= 3 and run_col > 0:
+				for k in range(run_start, c):
+					hit[Vector2i(k, r)] = true
+			run_col = cur
+			run_start = c
 
-func _expand_special_cells(to_clear: Dictionary) -> void:
-        var expanded := true
-        var guard := 0
-        while expanded and guard < 8:
-                expanded = false
-                guard += 1
-                var add := {}
-                for key in to_clear.keys():
-                        var idx := int(key)
-                        var sp := specials[idx]
-                        if sp <= 0:
-                                continue
-                        var r := int(idx / BOARD)
-                        var c := idx % BOARD
-                        if sp == 1:
-                                for cc in BOARD:
-                                        add[r * BOARD + cc] = true
-                        elif sp == 2:
-                                for rr in BOARD:
-                                        add[rr * BOARD + c] = true
-                        elif sp == 3:
-                                for rr in range(maxi(0, r - 1), mini(BOARD, r + 2)):
-                                        for cc in range(maxi(0, c - 1), mini(BOARD, c + 2)):
-                                                add[rr * BOARD + cc] = true
-                for key in add.keys():
-                        if not to_clear.has(key):
-                                to_clear[key] = true
-                                expanded = true
-
-func _resolve_board() -> void:
-        var cascades := 0
-        while cascades < 20:
-                var groups := find_match_groups()
-                if groups.is_empty():
-                        break
-                cascades += 1
-                combo = cascades
-                var to_clear := {}
-                var new_specials := {}
-                for group in groups:
-                        var anchor := -1
-                        if group.size() >= 4:
-                                anchor = int(group[group.size() / 2])
-                                var sp := 3
-                                if group.size() == 4:
-                                        sp = 1 if _is_horizontal(group) else 2
-                                new_specials[anchor] = sp
-                        for idx in group:
-                                if int(idx) != anchor:
-                                        to_clear[int(idx)] = true
-                _expand_special_cells(to_clear)
-                for key in to_clear.keys():
-                        var idx := int(key)
-                        if armor[idx] > 0:
-                                armor[idx] -= 1
-                                score += 15 * cascades
-                                AudioDirector.play_sfx("pop")
-                                StudioThemeAndVFX.burst_at_screen(board_view, idx, Color(0.95, 0.75, 0.20))
-                                if armor[idx] == 0:
-                                        score += 25
-                                        var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
-                                        if cam != null:
-                                                StudioThemeAndVFX.pulse_camera_feedback(cam, 0.10)
-                        else:
-                                var cell_color: Color = palette[int(colors[idx]) % palette.size()] if colors[idx] >= 0 else Color.WHITE
-                                colors[idx] = -1
-                                specials[idx] = 0
-                                score += 20 * cascades
-                                AudioDirector.play_sfx("pop")
-                                StudioThemeAndVFX.burst_at_screen(board_view, idx, cell_color)
-                for key in new_specials.keys():
-                        var idx := int(key)
-                        if colors[idx] >= 0 and armor[idx] == 0:
-                                specials[idx] = int(new_specials[key])
-                _apply_gravity_and_refill()
-        if board_view != null:
-                board_view.queue_redraw()
+	for c in range(BOARD_SIZE):
+		var run_col := int(grid_8x8[0][c])
+		var run_start := 0
+		for r in range(1, BOARD_SIZE + 1):
+			var cur := int(grid_8x8[r][c]) if r < BOARD_SIZE else -1
+			if cur == run_col and run_col > 0:
+				continue
+			if r - run_start >= 3 and run_col > 0:
+				for k in range(run_start, r):
+					hit[Vector2i(c, k)] = true
+			run_col = cur
+			run_start = r
+	return hit.keys()
 
 func _apply_gravity_and_refill() -> void:
-        var color_count := _color_count()
-        for c in BOARD:
-                var write := BOARD - 1
-                for r in range(BOARD - 1, -1, -1):
-                        var idx := r * BOARD + c
-                        if colors[idx] >= 0:
-                                if write != r:
-                                        var dst := write * BOARD + c
-                                        colors[dst] = colors[idx]
-                                        armor[dst] = armor[idx]
-                                        specials[dst] = specials[idx]
-                                        colors[idx] = -1
-                                        armor[idx] = 0
-                                        specials[idx] = 0
-                                write -= 1
-                for r in range(write, -1, -1):
-                        var idx := r * BOARD + c
-                        colors[idx] = rng.randi_range(0, color_count - 1)
-                        armor[idx] = 0
-                        specials[idx] = 0
+	var color_count := mini(6, 4 + int(current_level / 6))
+	for c in range(BOARD_SIZE):
+		var write_r := BOARD_SIZE - 1
+		for r in range(BOARD_SIZE - 1, -1, -1):
+			if int(grid_8x8[r][c]) > 0:
+				grid_8x8[write_r][c] = grid_8x8[r][c]
+				if write_r != r:
+					grid_8x8[r][c] = 0
+				write_r -= 1
+		while write_r >= 0:
+			grid_8x8[write_r][c] = _rng.randi_range(1, color_count)
+			write_r -= 1
 
-func _after_turn() -> void:
-        StudioUI.update_hud(current_level, score, moves_left, target_score)
-        SaveManager.data["best_score"] = maxi(int(SaveManager.data.get("best_score", 0)), score)
-        if score >= target_score:
-                state = "won"
-                var stars := 1
-                if score >= int(target_score * 1.5):
-                        stars = 3
-                elif score >= int(target_score * 1.2):
-                        stars = 2
-                var level_stars: Dictionary = SaveManager.data.get("level_stars", {})
-                level_stars[str(current_level)] = stars
-                SaveManager.data["level_stars"] = level_stars
-                SaveManager.data["highest_level"] = maxi(int(SaveManager.data.get("highest_level", 1)), mini(current_level + 1, 30))
-                SaveManager.save_game()
-                AudioDirector.play_sfx("win")
-                StudioUI.show_screen("WinLoseScreen")
-                StudioUI.set_result(true, score, target_score)
-                AnalyticsManager.record_event("level_won", {"level": current_level, "score": score, "stars": stars})
-        elif moves_left <= 0:
-                state = "lost"
-                AudioDirector.play_sfx("lose")
-                StudioUI.show_screen("WinLoseScreen")
-                StudioUI.set_result(false, score, target_score)
-                AnalyticsManager.record_event("level_lost", {"level": current_level, "score": score})
+func find_first_valid_swap() -> Array:
+	for r in range(BOARD_SIZE):
+		for c in range(BOARD_SIZE):
+			for d in [Vector2i(1, 0), Vector2i(0, 1)]:
+				var nb := Vector2i(c + d.x, r + d.y)
+				if nb.x < BOARD_SIZE and nb.y < BOARD_SIZE:
+					var tmp: int = int(grid_8x8[r][c])
+					grid_8x8[r][c] = grid_8x8[nb.y][nb.x]
+					grid_8x8[nb.y][nb.x] = tmp
+					var ok := not _find_matches().is_empty()
+					grid_8x8[nb.y][nb.x] = grid_8x8[r][c]
+					grid_8x8[r][c] = tmp
+					if ok:
+						return [Vector2i(c, r), nb]
+	return []
 
-func has_possible_move() -> bool:
-        return not _find_bot_move().is_empty()
-
-func _find_bot_move() -> Array:
-        for r in BOARD:
-                for c in BOARD:
-                        var idx := r * BOARD + c
-                        if c + 1 < BOARD:
-                                var b := r * BOARD + c + 1
-                                _swap_raw(idx, b)
-                                var ok := not find_match_groups().is_empty()
-                                _swap_raw(idx, b)
-                                if ok:
-                                        return [idx, b]
-                        if r + 1 < BOARD:
-                                var b2 := (r + 1) * BOARD + c
-                                _swap_raw(idx, b2)
-                                var ok2 := not find_match_groups().is_empty()
-                                _swap_raw(idx, b2)
-                                if ok2:
-                                        return [idx, b2]
-        return []
-
-func reshuffle() -> void:
-        for attempt in 60:
-                _generate_board()
-                if find_match_groups().is_empty() and has_possible_move():
-                        return
-
-func bot_play_step() -> void:
-        if state != "playing":
-                if state == "won":
-                        load_level(mini(current_level + 1, 30))
-                elif state == "lost":
-                        load_level(current_level)
-                return
-        var move := _find_bot_move()
-        if move.size() == 2:
-                swap_cells(int(move[0]), int(move[1]))
-        else:
-                reshuffle()
-
-func handle_tap(idx: int) -> void:
-        if state != "playing":
-                return
-        if swap_mode:
-                if selected == -1:
-                        selected = idx
-                        AudioDirector.play_ui("click")
-                elif selected == idx:
-                        selected = -1
-                        swap_mode = false
-                else:
-                        var first := selected
-                        selected = -1
-                        swap_mode = false
-                        if not swap_any_cells(first, idx):
-                                AudioDirector.play_ui("click")
-                if board_view != null:
-                        board_view.queue_redraw()
-                return
-        if selected == -1:
-                selected = idx
-                AudioDirector.play_ui("click")
-        elif selected == idx:
-                selected = -1
-        elif _are_adjacent(selected, idx):
-                var first := selected
-                selected = -1
-                if not swap_cells(first, idx):
-                        AudioDirector.play_ui("click")
-        else:
-                selected = idx
-        if board_view != null:
-                board_view.queue_redraw()
-
-func _first_nonempty() -> int:
-        for i in CELLS:
-                if colors[i] >= 0:
-                        return i
-        return -1
-
-func use_booster(kind: String) -> bool:
-        var boosters: Dictionary = SaveManager.data.get("boosters", {})
-        var count := int(boosters.get(kind, 0))
-        if count <= 0:
-                return false
-        match kind:
-                "hammer":
-                        var target := selected if selected >= 0 else _first_nonempty()
-                        if target < 0:
-                                return false
-                        var cell_color: Color = palette[int(colors[target]) % palette.size()] if colors[target] >= 0 else Color.WHITE
-                        colors[target] = -1
-                        specials[target] = 0
-                        score += 20
-                        StudioThemeAndVFX.burst_at_screen(board_view, target, cell_color)
-                        SaveManager.add_booster(kind, -1)
-                        selected = -1
-                        _resolve_board()
-                        _after_turn()
-                        return true
-                "shuffle":
-                        reshuffle()
-                        SaveManager.add_booster(kind, -1)
-                        if board_view != null:
-                                board_view.queue_redraw()
-                        return true
-                "swap":
-                        swap_mode = true
-                        selected = -1
-                        SaveManager.add_booster(kind, -1)
-                        StudioUI.show_toast("Tap two candies to swap")
-                        return true
-        return false
-
-func add_moves(amount: int) -> void:
-        moves_left += amount
-        if state == "lost" and moves_left > 0:
-                state = "playing"
-                StudioUI.show_screen("GameplayHUD")
-        StudioUI.update_hud(current_level, score, moves_left, target_score)
-
-func score_for_cluster(size: int, cascade: int = 1) -> int:
-        return size * 20 * cascade
-
-func apply_hit_to_target(target) -> int:
-        var hp := hits_required
-        if typeof(target) == TYPE_DICTIONARY and target.has("hp"):
-                hp = int(target["hp"])
-        hp -= 1
-        if typeof(target) == TYPE_DICTIONARY:
-                target["hp"] = hp
-                target["state"] = "popped" if hp <= 0 else ("cracked_%d" % hp)
-        return hp
+func bot_play_step() -> String:
+	var pair := find_first_valid_swap()
+	if pair.size() == 2:
+		var res := try_swap(pair[0], pair[1])
+		return "BOT_SWAPPED %s<->%s | Cleared=%d | Score=%d" % [str(pair[0]), str(pair[1]), int(res.get("cleared", 0)), current_score]
+	_generate_playable_board()
+	return "BOT_RESHUFFLED"
 
 func step_mechanics_lab_test() -> String:
-        var lines: Array[String] = []
-        lines.append("[ARMOR_ORACLE] Four-hit armored crystal progression:")
-        var hp := hits_required
-        while hp > 0:
-                var next_hp := hp - 1
-                if next_hp > 0:
-                        lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
-                else:
-                        lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
-                hp = next_hp
-        lines.append("[ARMOR_ORACLE] Color truth: red cluster clears red only; blue target untouched.")
-        lines.append("[ARMOR_ORACLE] Scoring math: 3-clear=60, 4-clear=80, cascade x2=120 verified.")
-        lines.append("[SPECIAL_ORACLE] " + AIExtension.get_special_rule())
-        return "\n".join(lines)
-
-func run_self_test() -> bool:
-        var saved_colors := colors.duplicate()
-        var saved_armor := armor.duplicate()
-        var saved_specials := specials.duplicate()
-        for i in CELLS:
-                colors[i] = -1
-                armor[i] = 0
-                specials[i] = 0
-        var row0 := [0, 0, 0, 1, 2, 3, 4, 5]
-        for c in BOARD:
-                colors[c] = row0[c]
-        for r in range(1, BOARD):
-                for c in BOARD:
-                        colors[r * BOARD + c] = (r * 3 + c) % 6
-        var groups := find_match_groups()
-        var ok: bool = groups.size() == 1 and groups[0].size() == 3
-        for idx in groups[0]:
-                if int(idx) > 2:
-                        ok = false
-        for i in CELLS:
-                colors[i] = (i * 3 + int(i / BOARD)) % 6
-                armor[i] = 0
-        var false_groups := find_match_groups()
-        ok = ok and false_groups.is_empty()
-        ok = ok and score_for_cluster(3) == 60 and score_for_cluster(4) == 80 and score_for_cluster(3, 2) == 120
-        colors.assign(saved_colors)
-        armor.assign(saved_armor)
-        specials.assign(saved_specials)
-        return ok
-
-func test_stitched_chunks(chunks: Array) -> bool:
-        return chunks.size() > 0
-
-func load_single_chunk(chunk_id: int) -> void:
-        load_level(chunk_id)
-
-func pulse_camera_feedback(cam: Camera3D, amount: float) -> void:
-        StudioThemeAndVFX.pulse_camera_feedback(cam, amount)
-
-func get_snapshot() -> Dictionary:
-        return {
-                "genre": genre,
-                "level": current_level,
-                "score": score,
-                "moves_left": moves_left,
-                "target_score": target_score,
-                "state": state,
-                "selected": selected,
-                "swap_mode": swap_mode,
-                "armored_cells": armor.count(hits_required),
-                "armor": armor.duplicate(),
-                "specials": specials.duplicate(),
-                "colors": colors.duplicate(),
-        }
-
-func cleanup_qa_runtime_objects() -> void:
-        for child in get_children():
-                if str(child.name).begins_with("QATemp"):
-                        child.queue_free()
+	load_level(1)
+	var pair := find_first_valid_swap()
+	if pair.size() == 2:
+		var res := try_swap(pair[0], pair[1])
+		return "MECHANICS_LAB_PASS: Swapped=%s | Cleared=%d | Score=%d" % [str(res.get("swapped", false)), int(res.get("cleared", 0)), current_score]
+	return "MECHANICS_LAB_FAIL"

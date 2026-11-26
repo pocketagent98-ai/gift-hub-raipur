@@ -1,95 +1,102 @@
 extends Node
 
-const MIN_SFX_INTERVAL_MS := 60
-const SAMPLE_RATE := 44100
+# ==============================================================================
+# MUSICAL PROCEDURAL AUDIO DIRECTOR (V6.0 — MARIMBA / BELL / CHIME SYNTH)
+# ==============================================================================
 
-var _last_sfx_ms := 0
-var _music_player: AudioStreamPlayer
+const SAMPLE_RATE: float = 22050.0
+const MIN_SFX_INTERVAL_MS: int = 40
+
+var _last_sfx_ms: int = 0
 var _sfx_player: AudioStreamPlayer
 var _ui_player: AudioStreamPlayer
-var _tones: Dictionary = {}
+var _muted: bool = false
 
 func _ready() -> void:
 	_ensure_buses()
-	_music_player = _make_player("Music")
-	_sfx_player = _make_player("SFX")
-	_ui_player = _make_player("UI")
-	_tones["click"] = _tone(880.0, 0.06, 0.25)
-	_tones["pop"] = _tone(660.0, 0.10, 0.35)
-	_tones["win"] = _tone(1046.5, 0.22, 0.40)
-	_tones["lose"] = _tone(196.0, 0.25, 0.40)
-	_tones["coin"] = _tone(1318.5, 0.08, 0.30)
-	_start_music_loop()
+	_sfx_player = AudioStreamPlayer.new()
+	_sfx_player.bus = "SFX"
+	add_child(_sfx_player)
+
+	_ui_player = AudioStreamPlayer.new()
+	_ui_player.bus = "UI"
+	add_child(_ui_player)
 
 func _ensure_buses() -> void:
 	for bus_name in ["Music", "SFX", "UI"]:
 		if AudioServer.get_bus_index(bus_name) == -1:
-			var idx := AudioServer.bus_count
-			AudioServer.add_bus(idx)
-			AudioServer.set_bus_name(idx, bus_name)
-			AudioServer.set_bus_send(idx, "Master")
+			AudioServer.add_bus()
+			AudioServer.set_bus_name(AudioServer.get_bus_count() - 1, bus_name)
 
-func _make_player(bus: String) -> AudioStreamPlayer:
-	var p := AudioStreamPlayer.new()
-	p.bus = bus
-	add_child(p)
-	return p
+func toggle_mute() -> bool:
+	_muted = not _muted
+	var idx := AudioServer.get_bus_index("Master")
+	if idx >= 0:
+		AudioServer.set_bus_mute(idx, _muted)
+	return _muted
 
-func _tone(freq: float, duration: float, volume: float) -> AudioStreamWAV:
-	var n := int(SAMPLE_RATE * duration)
-	var bytes := PackedByteArray()
-	bytes.resize(n * 2)
-	for i in n:
-		var t := float(i) / float(SAMPLE_RATE)
-		var env := 1.0 - (float(i) / float(n))
-		var sample := sin(TAU * freq * t) * volume * env
-		bytes.encode_s16(i * 2, int(clamp(sample, -1.0, 1.0) * 32767.0))
-	var wav := AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_16_BITS
-	wav.mix_rate = SAMPLE_RATE
-	wav.stereo = false
-	wav.data = bytes
-	return wav
-
-func _start_music_loop() -> void:
-	var wav := _tone(220.0, 2.0, 0.07)
-	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	wav.loop_begin = 0
-	wav.loop_end = SAMPLE_RATE * 2
-	_music_player.stream = wav
-	_music_player.volume_db = -14.0
-	_music_player.play()
-
-func _start_procedural_generator() -> void:
-	var generator := AudioStreamGenerator.new()
-	generator.mix_rate = SAMPLE_RATE
-	generator.buffer_length = 0.25
-	var player := _make_player("Music")
-	player.stream = generator
-	player.volume_db = -30.0
-	player.play()
-	var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback
-	if playback != null:
-		for i in 256:
-			playback.push_frame(Vector2(0.0, 0.0))
-
-func play_sfx(sound_name: String) -> void:
-	var now := Time.get_ticks_msec()
-	if now - _last_sfx_ms < MIN_SFX_INTERVAL_MS:
+func play_sfx(sfx_name: String, combo_level: int = 1) -> void:
+	if _muted:
 		return
-	_last_sfx_ms = now
-	if _tones.has(sound_name):
-		_sfx_player.stream = _tones[sound_name]
-		_sfx_player.play()
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_sfx_ms < MIN_SFX_INTERVAL_MS:
+		return
+	_last_sfx_ms = now_ms
 
-func play_ui(sound_name: String) -> void:
-	if _tones.has(sound_name):
-		_ui_player.stream = _tones[sound_name]
-		_ui_player.play()
+	var pentatonic := [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51]
+	var base_freq: float = pentatonic[clampi(combo_level - 1, 0, pentatonic.size() - 1)]
 
-func set_master_muted(muted: bool) -> void:
-	var master := AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_mute(master, muted)
+	match sfx_name:
+		"ui_click":
+			_play_marimba_tone(_ui_player, 660.0, 0.06, 0.25)
+		"place_block", "swap":
+			_play_marimba_tone(_sfx_player, 440.0, 0.09, 0.35)
+		"line_clear", "bubble_pop", "match":
+			_play_chord(_sfx_player, [base_freq, base_freq * 1.25, base_freq * 1.5], 0.24, 0.35)
+		"bubble_hit_crack", "armor_crack":
+			_play_marimba_tone(_sfx_player, 320.0, 0.11, 0.35)
+		"victory":
+			_play_chord(_sfx_player, [523.25, 659.25, 783.99, 1046.5], 0.38, 0.38)
+		"invalid":
+			_play_marimba_tone(_sfx_player, 196.0, 0.10, 0.25)
+		_:
+			_play_marimba_tone(_sfx_player, base_freq, 0.10, 0.28)
 
-func cleanup_qa_runtime_objects() -> void:
-	pass
+func _play_marimba_tone(player: AudioStreamPlayer, freq: float, duration: float, gain: float) -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = SAMPLE_RATE
+	gen.buffer_length = maxf(0.15, duration + 0.05)
+	player.stream = gen
+	player.play()
+	var pb := player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return
+	var total_frames := mini(pb.get_frames_available(), int(SAMPLE_RATE * duration))
+	for i in range(total_frames):
+		var t := float(i) / SAMPLE_RATE
+		var env := exp(-t * (8.0 / maxf(duration, 0.05)))
+		var s := (sin(TAU * freq * t) * 0.75 + sin(TAU * freq * 2.0 * t) * 0.25) * env * gain
+		pb.push_frame(Vector2(s, s))
+
+func _play_chord(player: AudioStreamPlayer, freqs: Array, duration: float, gain: float) -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = SAMPLE_RATE
+	gen.buffer_length = maxf(0.25, duration + 0.05)
+	player.stream = gen
+	player.play()
+	var pb := player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return
+	var total_frames := mini(pb.get_frames_available(), int(SAMPLE_RATE * duration))
+	var inv_n := 1.0 / float(max(1, freqs.size()))
+	for i in range(total_frames):
+		var t := float(i) / SAMPLE_RATE
+		var env := exp(-t * (5.5 / maxf(duration, 0.08)))
+		var mix := 0.0
+		for idx in range(freqs.size()):
+			var f := float(freqs[idx])
+			var delay := float(idx) * 0.03
+			if t >= delay:
+				mix += sin(TAU * f * (t - delay)) * inv_n
+		var s := mix * env * gain
+		pb.push_frame(Vector2(s, s))
