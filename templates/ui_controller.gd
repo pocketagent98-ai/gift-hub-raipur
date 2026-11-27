@@ -1,8 +1,11 @@
 extends CanvasLayer
 
 # ==============================================================================
-# COMMERCIAL-GRADE 12-SCREEN MOBILE UI CONTROLLER (V6.0)
+# COMMERCIAL-GRADE 12-SCREEN MOBILE UI CONTROLLER (V7.0 — MULTI-GENRE POLISHED)
 # ==============================================================================
+
+const Spec = preload("res://scripts/generated_ui_spec.gd")
+const TOUCH_MIN := Vector2(96, 56)
 
 const SCREEN_NAMES: Array[String] = [
 	"MainMenu", "LoadingScreen", "GameplayHUD", "PauseMenu",
@@ -21,12 +24,17 @@ var win_title_lbl: Label
 var win_detail_lbl: Label
 var board_view: Control
 
+func _theme_color(key: String, fallback: String = "#FFFFFF") -> Color:
+	return Color(str(Spec.THEME.get(key, fallback)))
+
 func _ready() -> void:
 	var bg := ColorRect.new()
 	bg.name = "StudioBackdrop"
-	bg.color = Color(0.06, 0.09, 0.18, 1.0)
+	bg.color = _theme_color("bg_top", "#0F172E")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+
+	_add_menu_particles(self)
 
 	var safe := MarginContainer.new()
 	safe.name = "SafeAreaMargin"
@@ -57,10 +65,29 @@ func _ready() -> void:
 
 	show_screen("MainMenu")
 
+func _add_menu_particles(parent: Node) -> void:
+	var p := CPUParticles2D.new()
+	p.name = "MenuParticles"
+	p.amount = 32
+	p.lifetime = 4.0
+	p.emitting = true
+	p.direction = Vector2(0, -1)
+	p.spread = 180.0
+	p.gravity = Vector2(0, -10)
+	p.initial_velocity_min = 12.0
+	p.initial_velocity_max = 45.0
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.1
+	p.color = _theme_color("accent_2", "#FFD166")
+	p.position = Vector2(360, 1240)
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(340, 20)
+	parent.add_child(p)
+
 func _styled_btn(label_txt: String, bg_col: Color, min_h: float = 64.0) -> Button:
 	var b := Button.new()
 	b.text = label_txt
-	b.custom_minimum_size = Vector2(180, min_h)
+	b.custom_minimum_size = Vector2(maxf(TOUCH_MIN.x, 180.0), maxf(TOUCH_MIN.y, min_h))
 	b.add_theme_font_size_override("font_size", 24)
 	b.add_theme_color_override("font_color", Color(1, 1, 1))
 	var sb := StyleBoxFlat.new()
@@ -81,6 +108,7 @@ func _styled_btn(label_txt: String, bg_col: Color, min_h: float = 64.0) -> Butto
 	b.add_theme_stylebox_override("hover", sb_h)
 	b.add_theme_stylebox_override("pressed", sb_h)
 	b.pressed.connect(func():
+		Input.vibrate_handheld(16)
 		var aud := get_node_or_null("/root/AudioDirector")
 		if aud != null:
 			aud.call("play_sfx", "ui_click")
@@ -112,8 +140,14 @@ func _build_screen(s_name: String) -> Control:
 	root.add_theme_constant_override("separation", 18)
 
 	var gm := get_node_or_null("/root/GameManager")
-	var gtitle := str(gm.get("GAME_TITLE")) if (gm != null and gm.get("GAME_TITLE") != null) else "Crystal Grid Cascade"
-	var genre := str(gm.get("GENRE")) if (gm != null and gm.get("GENRE") != null) else "block_puzzle"
+	var gtitle := str(Spec.GAME_TITLE)
+	if gm != null and gm.get("GAME_TITLE") != null and str(gm.get("GAME_TITLE")) != "":
+		gtitle = str(gm.get("GAME_TITLE"))
+	var genre := str(Spec.GENRE)
+	if gm != null and gm.get("GENRE") != null and str(gm.get("GENRE")) != "":
+		genre = str(gm.get("GENRE"))
+	elif gm != null and gm.get("genre") != null and str(gm.get("genre")) != "":
+		genre = str(gm.get("genre"))
 
 	if s_name == "MainMenu":
 		root.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -122,11 +156,16 @@ func _build_screen(s_name: String) -> Control:
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		title.add_theme_font_size_override("font_size", 42)
-		title.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
+		title.add_theme_color_override("font_color", _theme_color("accent", "#59D9FF"))
 		root.add_child(title)
 
 		var sub := Label.new()
-		sub.text = "Drag blocks onto the 8x8 crystal board, clear rows & columns, and ignite Fever Overdrive!" if genre == "block_puzzle" else "Swipe adjacent crystals to match 3+, unleash cascades, and conquer 30 handcrafted levels!"
+		if genre == "block_puzzle":
+			sub.text = "Drag blocks onto the 8x8 crystal board, clear rows & columns, and ignite Fever Overdrive!"
+		elif genre == "screw_puzzle":
+			sub.text = "Unscrew color-matched bolts, drop layered plates, and master 30 handcrafted mechanical puzzles!"
+		else:
+			sub.text = "Swipe adjacent crystals to match 3+, unleash cascades, and conquer 30 handcrafted levels!"
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sub.add_theme_font_size_override("font_size", 20)
@@ -135,7 +174,12 @@ func _build_screen(s_name: String) -> Control:
 
 		var play_b := _styled_btn("PLAY NOW", Color(0.16, 0.72, 0.48), 78.0)
 		play_b.name = "Btn_MainMenu_to_GameplayHUD"
-		play_b.pressed.connect(func(): show_screen("GameplayHUD"))
+		play_b.pressed.connect(func():
+			var g := get_node_or_null("/root/GameManager")
+			if g != null and g.has_method("load_level"):
+				g.call("load_level", maxi(1, int(g.get("current_level"))))
+			show_screen("GameplayHUD")
+		)
 		root.add_child(play_b)
 
 		var lvl_b := _styled_btn("LEVEL MAP (1 - 30)", Color(0.22, 0.50, 0.86), 66.0)
@@ -181,18 +225,24 @@ func _build_screen(s_name: String) -> Control:
 		root.add_child(top)
 
 		var hint := Label.new()
-		hint.text = "TUTORIAL: Drag a block from the tray onto the 8x8 board (or tap piece then tap board)!" if genre == "block_puzzle" else "TUTORIAL: Swipe any two adjacent gems to match 3+ in a row!"
+		if genre == "block_puzzle":
+			hint.text = "TUTORIAL: Drag a block from the tray onto the 8x8 board (or tap piece then tap board)!"
+		elif genre == "screw_puzzle":
+			hint.text = "TUTORIAL: Tap color-matched screws to clear each layered plate!"
+		else:
+			hint.text = "TUTORIAL: Swipe any two adjacent gems to match 3+ in a row!"
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		hint.add_theme_font_size_override("font_size", 17)
 		hint.add_theme_color_override("font_color", Color(0.75, 0.85, 0.98))
 		root.add_child(hint)
 
-		var bv_script := load("res://scripts/board_view.gd")
-		if bv_script != null:
-			board_view = bv_script.new()
-			board_view.name = "BoardView"
-			root.add_child(board_view)
+		if genre != "screw_puzzle":
+			var bv_script := load("res://scripts/board_view.gd")
+			if bv_script != null:
+				board_view = bv_script.new()
+				board_view.name = "BoardView"
+				root.add_child(board_view)
 
 		if genre == "block_puzzle":
 			var boosters := HBoxContainer.new()
@@ -349,6 +399,18 @@ func _build_screen(s_name: String) -> Control:
 
 	return root
 
+func update_hud(level: int, score: int, _moves: int, target: int) -> void:
+	if hud_level_lbl != null:
+		hud_level_lbl.text = "LVL %d" % level
+	if hud_score_lbl != null:
+		hud_score_lbl.text = "SCORE: %d / %d" % [score, target]
+
+func set_result(win: bool, score: int, target: int) -> void:
+	if win_title_lbl != null:
+		win_title_lbl.text = "LEVEL COMPLETE!" if win else "OUT OF MOVES!"
+	if win_detail_lbl != null:
+		win_detail_lbl.text = "Score: %d / %d" % [score, target]
+
 func _on_level_changed(_lvl: int) -> void:
 	_refresh_hud_noargs()
 
@@ -362,14 +424,14 @@ func _refresh_hud_noargs() -> void:
 	if hud_level_lbl != null:
 		hud_level_lbl.text = "LVL %d" % int(gm.get("current_level"))
 	if hud_score_lbl != null:
-		var goal := int(gm.get("level_goal"))
-		var sc := int(gm.get("current_score"))
-		var combo := int(gm.get("current_combo"))
+		var goal := int(gm.get("level_goal")) if gm.get("level_goal") != null else int(gm.get("target_score"))
+		var sc := int(gm.get("current_score")) if gm.get("current_score") != null else int(gm.get("score"))
+		var combo := int(gm.get("current_combo")) if gm.get("current_combo") != null else int(gm.get("combo"))
 		var ctxt := ("  x%d!" % combo) if combo > 1 else ""
 		hud_score_lbl.text = "SCORE: %d / %d%s" % [sc, goal, ctxt]
-	if hud_juggle_btn != null:
+	if hud_juggle_btn != null and gm.get("juggle_swaps_remaining") != null:
 		hud_juggle_btn.text = "JUGGLE SWAP (%d)" % int(gm.get("juggle_swaps_remaining"))
-	if hud_hammer_btn != null:
+	if hud_hammer_btn != null and gm.get("hammer_boosters_remaining") != null:
 		var act := bool(gm.get("hammer_mode_active"))
 		hud_hammer_btn.text = ("TAP BOARD TO SMASH!" if act else "HAMMER 3x3 (%d)" % int(gm.get("hammer_boosters_remaining")))
 
@@ -387,13 +449,19 @@ func _on_game_over(final_score: int) -> void:
 		win_detail_lbl.text = "Score: %d — Tap Retry or use Juggle Swap!" % final_score
 	show_screen("WinLoseScreen")
 
-func show_screen(s_name: String) -> void:
-	if not screens.has(s_name):
+func show_screen(screen_name: String) -> void:
+	if not screens.has(screen_name):
 		return
-	active_screen = s_name
+	active_screen = screen_name
 	for k in screens.keys():
-		(screens[k] as Control).visible = (k == s_name)
-	if s_name == "GameplayHUD":
+		(screens[k] as Control).visible = (k == screen_name)
+	var board_layer := get_tree().root.find_child("BoardLayer", true, false) as CanvasLayer
+	if board_layer != null:
+		board_layer.visible = (screen_name == "GameplayHUD")
+	if screen_name == "GameplayHUD":
 		_refresh_hud_noargs()
 		if board_view != null:
 			board_view.queue_redraw()
+	var tw := create_tween()
+	screens[screen_name].modulate = Color(1, 1, 1, 0)
+	tw.tween_property(screens[screen_name], "modulate", Color(1, 1, 1, 1), 0.18)

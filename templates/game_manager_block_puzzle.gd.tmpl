@@ -176,6 +176,15 @@ func preview_clear_lines(cells: Array, gx: int, gy: int) -> Dictionary:
 			cols.append(c)
 	return {"rows": rows, "cols": cols}
 
+func handle_tap(idx: int) -> void:
+	var gx := idx % BOARD_SIZE
+	var gy := int(idx / BOARD_SIZE)
+	for i in range(tray_pieces.size()):
+		if not bool(tray_pieces[i]["used"]):
+			var res := place_tray_piece(i, gx, gy)
+			if bool(res.get("placed", false)):
+				return
+
 func place_tray_piece(tray_idx: int, gx: int, gy: int) -> Dictionary:
 	if tray_idx < 0 or tray_idx >= tray_pieces.size():
 		return {"placed": false}
@@ -211,6 +220,9 @@ func place_tray_piece(tray_idx: int, gx: int, gy: int) -> Dictionary:
 		last_popup_text = ("FEVER +%d!" % pts) if fever_overdrive_active else ("+%d  x%d" % [pts, current_combo])
 		if aud != null:
 			aud.call("play_sfx", "line_clear", current_combo)
+		var cam := get_tree().root.find_child("Camera3D", true, false) as Camera3D
+		if cam != null:
+			pulse_camera_feedback(cam, 0.08)
 	else:
 		current_combo = 0
 		fever_overdrive_active = false
@@ -341,6 +353,11 @@ func add_moves(count: int) -> void:
 	moves_left += maxi(1, count)
 	juggle_swaps_remaining += 1
 	emit_signal("state_changed")
+
+func pulse_camera_feedback(cam: Camera3D, amount: float) -> void:
+	var vfx := get_node_or_null("/root/StudioThemeAndVFX")
+	if vfx != null and vfx.has_method("pulse_camera_feedback"):
+		vfx.call("pulse_camera_feedback", cam, amount)
 
 func apply_hit_to_target(hit_power: int = 1) -> Dictionary:
 	armored_block_hp = maxi(0, armored_block_hp - maxi(1, hit_power))

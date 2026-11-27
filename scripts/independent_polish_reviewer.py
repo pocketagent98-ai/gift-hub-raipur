@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Independent 7-dimension commercial polish reviewer.
+"""Independent 7-dimension commercial polish reviewer (V7.0).
 
 Scores are computed bottom-up from real generated code, the declarative UI
-contract, the AI blueprint, and the strict visual-critic report. Any dimension
-below target (90, or 85 for audio/visual evidence) fails the stage.
+contract, the AI blueprint, and the strict visual-critic report across
+block_puzzle, match_3, and screw_puzzle genres.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def evaluate_studio_quality(project_root: Path = Path(".")) -> Dict[str, Any]:
 
     graphics_points = score_checks([
         ("Missing generated AI theme palette", 15, bool(blueprint.get("theme"))),
-        ("Missing glossy beveled 3D decor in main_scene.gd", 20, "clearcoat" in main_scene and "SphereMesh" in main_scene or "TorusMesh" in main_scene),
+        ("Missing glossy beveled 3D decor in main_scene.gd", 20, "clearcoat" in main_scene and ("SphereMesh" in main_scene or "TorusMesh" in main_scene)),
         ("Missing real custom board renderer", 25, "func _draw(" in board and "draw_circle" in board and "draw_style_box" in board),
         ("Missing VFX burst/particles", 20, "burst_at_screen" in vfx and "CPUParticles3D" in vfx),
         ("Missing WorldEnvironment / lighting", 10, "WorldEnvironment" in tscn and "DirectionalLight3D" in tscn),
@@ -101,21 +101,27 @@ def evaluate_studio_quality(project_root: Path = Path(".")) -> Dict[str, Any]:
 
     scores["Animations & Game Feel"] = score_checks([
         ("Missing button Tween animation", 20, "create_tween()" in ui and "lightened(" in ui),
-        ("Missing screen fade transitions", 15, "tween_property(screens[screen_name], \"modulate\"" in ui),
+        ("Missing screen fade transitions", 15, 'tween_property(screens[screen_name], "modulate"' in ui),
         ("Missing CPUParticles2D menu atmosphere", 15, "CPUParticles2D" in ui),
         ("Missing camera feedback pulse", 20, "pulse_camera_feedback" in gm and "pulse_camera_feedback" in vfx),
         ("Missing mobile haptic vibration", 15, "vibrate_handheld" in ui),
         ("Missing board animation loop", 15, "_process" in board and "queue_redraw" in board),
     ], defects)
 
-    genre_tokens = ("find_match_groups", "specials", "armor") if genre == "match_3" else ("is_screw_tappable", "plates", "screws", "tools")
+    if genre == "block_puzzle":
+        genre_tokens = ("place_tray_piece", "can_place_piece", "grid_8x8", "tray_pieces")
+    elif genre == "match_3":
+        genre_tokens = ("find_match_groups", "specials", "armor")
+    else:
+        genre_tokens = ("is_screw_tappable", "plates", "screws", "tools")
+
     scores["Gameplay Presentation"] = score_checks([
         ("Missing real level loader", 20, "func load_level(" in gm),
         ("Missing boosters", 15, "func use_booster(" in gm and boosters >= 3),
         ("Missing genre-specific mechanics", 25, all(t in gm for t in genre_tokens)),
-        ("Missing win/lose state machine", 15, "state = \"won\"" in gm and "state = \"lost\"" in gm),
+        ("Missing win/lose state machine", 15, 'state = "won"' in gm and 'state = "lost"' in gm),
         ("Missing 30-level tuning", 10, len(blueprint.get("level_names", [])) == 30),
-        ("Missing touch input handler", 15, "handle_tap" in gm or "handle_screw_tap" in gm),
+        ("Missing touch input handler", 15, "handle_tap" in gm or "handle_screw_tap" in gm or "place_tray_piece" in gm),
     ], defects)
 
     audio_score = score_checks([

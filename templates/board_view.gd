@@ -1,9 +1,12 @@
 extends Control
 
 # ==============================================================================
-# INTERACTIVE COMMERCIAL-POLISH PUZZLE BOARD VIEW (V6.0)
+# INTERACTIVE COMMERCIAL-POLISH PUZZLE BOARD VIEW (V7.0 — BLOCK / MATCH3 / SCREW)
 # ==============================================================================
 
+const Spec = preload("res://scripts/generated_ui_spec.gd")
+
+var manager: Node = null
 var _board_rect: Rect2 = Rect2()
 var _cell_size: float = 64.0
 var _tray_rects: Array[Rect2] = []
@@ -25,22 +28,62 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var gm := get_node_or_null("/root/GameManager")
+	var gm := _get_gm()
 	if gm != null:
 		if gm.has_signal("state_changed"):
 			gm.connect("state_changed", Callable(self, "_on_game_state_changed"))
 		if gm.has_signal("board_updated"):
 			gm.connect("board_updated", Callable(self, "_on_board_updated"))
 
+func _get_gm() -> Node:
+	if manager != null:
+		return manager
+	return get_node_or_null("/root/GameManager")
+
+func _get_genre(gm: Node) -> String:
+	if gm == null:
+		return "block_puzzle"
+	var g = gm.get("GENRE")
+	if g != null and str(g) != "":
+		return str(g)
+	var g2 = gm.get("genre")
+	if g2 != null and str(g2) != "":
+		return str(g2)
+	return "block_puzzle"
+
+func _panel_style(color: Color, radius: int = 22, border: Color = Color(1, 1, 1, 0.16)) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = color
+	sb.set_corner_radius_all(radius)
+	sb.border_width_left = 3
+	sb.border_width_right = 3
+	sb.border_width_top = 3
+	sb.border_width_bottom = 3
+	sb.border_color = border
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 14
+	sb.shadow_offset = Vector2(0, 6)
+	return sb
+
+func cell_center(cell_index: int) -> Vector2:
+	_compute_layout()
+	var r := int(cell_index / 8)
+	var c := cell_index % 8
+	return _grid_to_local_center(c, r)
+
 func _on_game_state_changed() -> void:
 	queue_redraw()
 
 func _on_board_updated(cleared_count: int) -> void:
-	var gm := get_node_or_null("/root/GameManager")
+	var gm := _get_gm()
 	if gm == null:
 		return
-	var cleared_cells: Array = gm.get("last_cleared_cells") if gm.get("last_cleared_cells") != null else []
-	var pal: Array = gm.get("PALETTE")
+	var cleared_cells = gm.get("last_cleared_cells")
+	if cleared_cells == null:
+		cleared_cells = []
+	var pal = gm.get("PALETTE")
+	if pal == null:
+		pal = [Color(1, 0.85, 0.3)]
 	for item in cleared_cells:
 		var gpos: Vector2i = item["pos"]
 		var cid: int = int(item["color_id"])
@@ -57,14 +100,15 @@ func _on_board_updated(cleared_count: int) -> void:
 				"size": randf_range(5.0, 12.0)
 			})
 	var ptxt := str(gm.get("last_popup_text"))
-	if ptxt != "":
-		var pgrid: Vector2i = gm.get("last_popup_grid_pos")
-		_popups.append({
-			"pos": _grid_to_local_center(pgrid.x, pgrid.y),
-			"text": ptxt,
-			"life": 0.95,
-			"color": Color(1.0, 0.92, 0.35) if cleared_count > 0 else Color(0.75, 0.95, 1.0)
-		})
+	if ptxt != "" and ptxt != "<null>":
+		var pgrid = gm.get("last_popup_grid_pos")
+		if pgrid is Vector2i:
+			_popups.append({
+				"pos": _grid_to_local_center(pgrid.x, pgrid.y),
+				"text": ptxt,
+				"life": 0.95,
+				"color": Color(1.0, 0.92, 0.35) if cleared_count > 0 else Color(0.75, 0.95, 1.0)
+			})
 	if cleared_count > 0:
 		_shake_timer = 0.22
 	queue_redraw()
@@ -72,6 +116,16 @@ func _on_board_updated(cleared_count: int) -> void:
 func _process(delta: float) -> void:
 	_pulse_time += delta
 	var dirty := false
+	var gm := _get_gm()
+	if gm != null and _get_genre(gm) == "screw_puzzle":
+		for plate in gm.get("plates"):
+			if bool(plate.get("removed", false)) and float(plate.get("fall", 0.0)) < 1.0:
+				plate["fall"] = minf(float(plate.get("fall", 0.0)) + delta * 1.8, 1.0)
+				dirty = true
+		for screw in gm.get("screws"):
+			if float(screw.get("anim", 0.0)) > 0.0:
+				screw["anim"] = maxf(float(screw.get("anim", 0.0)) - delta * 2.6, 0.0)
+				dirty = true
 	if _shake_timer > 0.0:
 		_shake_timer = maxf(0.0, _shake_timer - delta)
 		dirty = true
@@ -101,10 +155,15 @@ func _compute_layout() -> void:
 	var w := size.x
 	var h := size.y
 	if w <= 10.0 or h <= 10.0:
+		var vp := get_viewport_rect().size
+		w = vp.x
+		h = vp.y
+	if w <= 10.0 or h <= 10.0:
 		return
-	var gm := get_node_or_null("/root/GameManager")
-	var is_bp := (gm != null and str(gm.get("GENRE")) == "block_puzzle")
-	var tray_reserve := h * 0.27 if is_bp else 24.0
+	var gm := _get_gm()
+	var g := _get_genre(gm)
+	var is_bp := (g == "block_puzzle")
+	var tray_reserve := h * 0.27 if is_bp else (h * 0.16 if g == "screw_puzzle" else 24.0)
 	var avail_h := maxf(180.0, h - tray_reserve - 24.0)
 	var board_side := minf(w - 28.0, avail_h)
 	_cell_size = floor(board_side / 8.0)
@@ -137,14 +196,46 @@ func _local_to_grid(pos: Vector2) -> Vector2i:
 	return Vector2i(-1, -1)
 
 func _gui_input(event: InputEvent) -> void:
-	var gm := get_node_or_null("/root/GameManager")
+	var gm := _get_gm()
 	if gm == null:
 		return
-	var genre := str(gm.get("GENRE"))
-	if genre == "block_puzzle":
+	var g := _get_genre(gm)
+	if g == "block_puzzle":
 		_handle_block_puzzle_input(event, gm)
+	elif g == "screw_puzzle":
+		_handle_screw_input(event, gm)
 	else:
 		_handle_match3_input(event, gm)
+
+func _handle_screw_input(event: InputEvent, gm: Node) -> void:
+	var pressed := false
+	var pos := Vector2.ZERO
+	if event is InputEventScreenTouch and event.pressed:
+		pressed = true
+		pos = event.position
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		pressed = true
+		pos = event.position
+	if not pressed:
+		return
+	_compute_layout()
+	var scale := _board_rect.size.x / 8.0
+	var nearest := -1
+	var best := 56.0
+	var screws: Array = gm.get("screws")
+	for i in range(screws.size()):
+		var screw = screws[i]
+		if bool(screw.get("removed", false)):
+			continue
+		var center := _board_rect.position + Vector2(screw["pos"]) * scale
+		var dist := center.distance_to(pos)
+		if dist < best:
+			best = dist
+			nearest = i
+	if nearest >= 0:
+		gm.call("handle_screw_tap", nearest)
+		queue_redraw()
+		accept_event()
 
 func _handle_block_puzzle_input(event: InputEvent, gm: Node) -> void:
 	var pressed := false
@@ -271,7 +362,7 @@ func _handle_match3_input(event: InputEvent, gm: Node) -> void:
 
 func _draw() -> void:
 	_compute_layout()
-	var gm := get_node_or_null("/root/GameManager")
+	var gm := _get_gm()
 	if gm == null or _board_rect.size.x <= 10.0:
 		return
 
@@ -281,12 +372,16 @@ func _draw() -> void:
 
 	var frame := _board_rect.grow(10.0)
 	frame.position += shake_off
-	draw_rect(frame, Color(0.11, 0.14, 0.26, 0.96), true)
-	draw_rect(frame, Color(0.36, 0.68, 1.0, 0.85), false, 3.0)
+	draw_style_box(_panel_style(Color(0.11, 0.14, 0.26, 0.96), 24, Color(0.36, 0.68, 1.0, 0.85)), frame)
+
+	var g := _get_genre(gm)
+	if g == "screw_puzzle":
+		_draw_screw(_board_rect, gm)
+		return
 
 	var grid: Array = gm.get("grid_8x8")
 	var pal: Array = gm.get("PALETTE")
-	var is_bp := (str(gm.get("GENRE")) == "block_puzzle")
+	var is_bp := (g == "block_puzzle")
 
 	var clear_rows: Array = []
 	var clear_cols: Array = []
@@ -374,6 +469,61 @@ func _draw() -> void:
 		var pc: Color = pop["color"]
 		pc.a = clampf(float(pop["life"]) * 1.4, 0.0, 1.0)
 		draw_string(font, pop["pos"] - Vector2(50, 0), str(pop["text"]), HORIZONTAL_ALIGNMENT_CENTER, 120, 28, pc)
+
+func _draw_screw(br: Rect2, gm: Node) -> void:
+	var scale := br.size.x / 8.0
+	var pal: Array = gm.get("palette") if gm.get("palette") != null else gm.get("PALETTE")
+	for plate in gm.get("plates"):
+		var removed := bool(plate.get("removed", false))
+		var fall := float(plate.get("fall", 0.0))
+		if removed and fall >= 1.0:
+			continue
+		var rect: Rect2 = plate["rect"]
+		var offset := Vector2(0, fall * 110.0)
+		var pr := Rect2(br.position + rect.position * scale + offset, rect.size * scale)
+		var plate_color: Color = pal[int(plate["color"]) % pal.size()]
+		var alpha := 1.0 - fall if removed else 1.0
+		var style := _panel_style(Color(plate_color.darkened(0.24), alpha), 16, Color(plate_color.lightened(0.45), alpha))
+		draw_style_box(style, pr)
+		draw_line(pr.position + Vector2(12, 8), pr.position + Vector2(pr.size.x - 12, 8), Color(1, 1, 1, 0.28 * alpha), 2.0)
+		draw_string(ThemeDB.fallback_font, pr.position + Vector2(12, 28), "PLATE %d" % int(plate["id"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.85 * alpha))
+	for screw in gm.get("screws"):
+		if bool(screw.get("removed", false)):
+			continue
+		var center := br.position + Vector2(screw["pos"]) * scale
+		var screw_color: Color = pal[int(screw["color"]) % pal.size()]
+		var anim := float(screw.get("anim", 0.0))
+		var spin := anim * TAU
+		draw_circle(center, 22.0, Color(0.04, 0.06, 0.08, 0.85))
+		draw_circle(center, 17.0, Color(0.22, 0.26, 0.32))
+		draw_circle(center, 14.0, screw_color)
+		draw_circle(center + Vector2(-4, -5), 4.5, Color(1, 1, 1, 0.7))
+		var dir := Vector2(cos(spin), sin(spin)) * 10.0
+		draw_line(center - dir, center + dir, Color(0.04, 0.04, 0.05), 3.0)
+		if int(screw.get("hp", 0)) > 0:
+			draw_arc(center, 21.0, 0.0, TAU, 24, Color(1.0, 0.78, 0.16), 3.0)
+			draw_string(ThemeDB.fallback_font, center + Vector2(-6, 7), str(int(screw["hp"])), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.05, 0.03, 0.0))
+		if gm.has_method("is_screw_tappable") and not bool(gm.call("is_screw_tappable", screw)):
+			draw_circle(center, 17.0, Color(0, 0, 0, 0.55))
+	var bar_y := br.end.y + 38.0
+	draw_string(ThemeDB.fallback_font, Vector2(br.position.x + 12.0, bar_y - 10.0), "TOOLBOX", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.85, 0.92, 1.0))
+	var tools: Array = gm.get("tools")
+	for i in range(tools.size()):
+		var tool_color: Color = pal[int(tools[i]) % pal.size()]
+		var tool_pos := Vector2(br.position.x + 52.0 + i * 86.0, bar_y + 22.0)
+		draw_circle(tool_pos, 26.0, Color(0.08, 0.12, 0.18))
+		draw_circle(tool_pos, 20.0, tool_color)
+		draw_circle(tool_pos + Vector2(-5, -6), 5.0, Color(1, 1, 1, 0.6))
+		draw_arc(tool_pos, 26.0, 0.0, TAU, 24, Color(0.8, 0.9, 1.0), 2.0)
+	draw_string(ThemeDB.fallback_font, Vector2(br.end.x - 210.0, bar_y - 10.0), "TEMP", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.85, 0.92, 1.0))
+	var temp: Array = gm.get("temp")
+	for j in range(3):
+		var slot := Vector2(br.end.x - 180.0 + j * 58.0, bar_y + 22.0)
+		draw_rect(Rect2(slot - Vector2(22, 22), Vector2(44, 44)), Color(0.10, 0.14, 0.22), true)
+		draw_rect(Rect2(slot - Vector2(22, 22), Vector2(44, 44)), Color(0.4, 0.55, 0.7), false, 2.0)
+		if j < temp.size():
+			var temp_color: Color = pal[int(temp[j]) % pal.size()]
+			draw_circle(slot, 16.0, temp_color)
 
 func _draw_tray_piece(slot: Rect2, cells: Array, col: Color) -> void:
 	var max_x := 0

@@ -1,7 +1,7 @@
 extends Node
 
 # ==============================================================================
-# MUSICAL PROCEDURAL AUDIO DIRECTOR (V6.0 — MARIMBA / BELL / CHIME SYNTH)
+# MUSICAL PROCEDURAL AUDIO DIRECTOR (V7.0 — MARIMBA / BELL / CHIME SYNTH)
 # ==============================================================================
 
 const SAMPLE_RATE: float = 22050.0
@@ -35,6 +35,9 @@ func toggle_mute() -> bool:
 		AudioServer.set_bus_mute(idx, _muted)
 	return _muted
 
+func play_ui(_sound_name: String = "click") -> void:
+	play_sfx("ui_click", 1)
+
 func play_sfx(sfx_name: String, combo_level: int = 1) -> void:
 	if _muted:
 		return
@@ -47,17 +50,17 @@ func play_sfx(sfx_name: String, combo_level: int = 1) -> void:
 	var base_freq: float = pentatonic[clampi(combo_level - 1, 0, pentatonic.size() - 1)]
 
 	match sfx_name:
-		"ui_click":
+		"ui_click", "click":
 			_play_marimba_tone(_ui_player, 660.0, 0.06, 0.25)
 		"place_block", "swap":
 			_play_marimba_tone(_sfx_player, 440.0, 0.09, 0.35)
-		"line_clear", "bubble_pop", "match":
+		"line_clear", "bubble_pop", "match", "pop", "coin":
 			_play_chord(_sfx_player, [base_freq, base_freq * 1.25, base_freq * 1.5], 0.24, 0.35)
 		"bubble_hit_crack", "armor_crack":
 			_play_marimba_tone(_sfx_player, 320.0, 0.11, 0.35)
-		"victory":
+		"victory", "win":
 			_play_chord(_sfx_player, [523.25, 659.25, 783.99, 1046.5], 0.38, 0.38)
-		"invalid":
+		"invalid", "lose":
 			_play_marimba_tone(_sfx_player, 196.0, 0.10, 0.25)
 		_:
 			_play_marimba_tone(_sfx_player, base_freq, 0.10, 0.28)
@@ -100,3 +103,6 @@ func _play_chord(player: AudioStreamPlayer, freqs: Array, duration: float, gain:
 				mix += sin(TAU * f * (t - delay)) * inv_n
 		var s := mix * env * gain
 		pb.push_frame(Vector2(s, s))
+
+func cleanup_qa_runtime_objects() -> void:
+	pass
