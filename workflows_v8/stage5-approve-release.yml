@@ -1,0 +1,58 @@
+name: Stage 5 — Approve, Encrypt & Sign Final Release (V8.0)
+
+on:
+  workflow_dispatch:
+    inputs:
+      game_id:
+        description: "Approved Game ID (e.g. block_blast_studio_01 or bolt_master_studio_02)"
+        required: true
+        default: "block_blast_studio_01"
+      release_version:
+        description: "Release tag version"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION_TAG: "4.7.2-stable"
+  GODOT_TEMPLATE_ID: "4.7.2.stable"
+  LIBGL_ALWAYS_SOFTWARE: "1"
+
+jobs:
+  stage5_approve_and_sign:
+    name: Stage 5 — Safety Audit, AES-256 & Signed Release APK + Play Store AAB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      SCRIPT_AES256_ENCRYPTION_KEY: ${{ secrets.SCRIPT_AES256_ENCRYPTION_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Pull Approved Project from HF Vault
+        run: |
+          pip install -q huggingface_hub requests
+          python3 scripts/hf_vault_sync.py pull_stage2
+      - name: Run Content Safety Audit & Play Store Listing Kit (replica-brand + replica-launch)
+        run: python3 scripts/v8_stage5_release.py
+      - name: Export Signed Release APK + Play Store AAB (Target SDK 36)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri unzip
+          mkdir -p ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}" build/android build/final_release
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          GODOT_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['linux_x86_64_zip'])")
+          echo "${GODOT_SHA}  /tmp/godot.zip" | sha512sum -c -
+          unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
+          sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
+          xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --path . --export-release "Android (Direct Install APK)" build/android/game_release.apk
+          xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --path . --export-release "Android (Play Store Signed AAB)" build/android/game_release.aab
+          cp build/android/game_release.apk build/android/game_release.aab docs/V8_FINAL_RELEASE_REPORT.json build/final_release/
+      - name: Publish Final Signed Release to GitHub Releases
+        run: |
+          TAG="${{ inputs.game_id }}-${{ inputs.release_version }}-final"
+          gh release create "$TAG" build/final_release/* --title "Final Signed Release — ${{ inputs.game_id }} ${{ inputs.release_version }}" --notes "Human-approved signed Release APK + Play Store AAB + Content Safety & Store-Kit." --repo "$GITHUB_REPOSITORY"

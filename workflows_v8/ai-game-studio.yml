@@ -1,0 +1,145 @@
+name: AI Game Studio V8.0 (4-Stage Autonomous Pipeline)
+
+on:
+  workflow_dispatch:
+    inputs:
+      game_slot:
+        description: "Select game from config/game_queue.json"
+        required: true
+        default: "game_1"
+        type: choice
+        options:
+          - game_1
+          - game_2
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION_TAG: "4.7.2-stable"
+  GODOT_TEMPLATE_ID: "4.7.2.stable"
+  LIBGL_ALWAYS_SOFTWARE: "1"
+  GODOT_SILENCE_ROOT_WARNING: "1"
+
+jobs:
+  stage1_blueprint:
+    name: Stage 1 — Play Store Deconstruction & 6 Game Bibles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Stage 1 dependencies
+        run: pip install -q google-play-scraper huggingface_hub requests
+      - name: Run Stage 1 Deep Deconstruction & 6 Bibles
+        run: python3 scripts/v8_stage1_blueprint.py --game-slot "${{ inputs.game_slot }}"
+      - name: Upload Stage 1 Blueprints to HF Vault
+        run: python3 scripts/hf_vault_sync.py push_stage1
+
+  stage2_hd_assets:
+    name: Stage 2 — HD Studio Art, OFL Fonts, Shaders & BGM/SFX
+    needs: stage1_blueprint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Stage 2 dependencies + cactus-compute
+        run: |
+          pip install -q pillow huggingface_hub requests
+          pip install -q -U cactus-compute || true
+      - name: Pull Stage 1 Blueprints from HF Vault
+        run: python3 scripts/hf_vault_sync.py pull_stage1
+      - name: Generate HD Art, OFL Fonts, Shaders & Audio
+        run: python3 scripts/v8_stage2_assets.py
+      - name: Upload Stage 2 Assets to HF Vault
+        run: python3 scripts/hf_vault_sync.py push_stage2
+
+  stage3_godot_build:
+    name: Stage 3 — Multi-Agent Godot 4.7.2 Build + 3-Cycle Self-Heal
+    needs: stage2_hd_assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Boot Xvfb & install Godot 4.7.2 GUI (SHA-512 verified)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri unzip
+          pip install -q huggingface_hub requests
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          GODOT_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['linux_x86_64_zip'])")
+          echo "${GODOT_SHA}  /tmp/godot.zip" | sha512sum -c -
+          unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
+          sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
+      - name: Pull Stage 1 & 2 from HF Vault
+        run: |
+          python3 scripts/hf_vault_sync.py pull_stage1
+          python3 scripts/hf_vault_sync.py pull_stage2
+      - name: Autonomous Multi-Agent Godot 4.7.2 Build
+        run: python3 scripts/v8_stage3_godot_builder.py
+      - name: Upload Built Project to HF Vault
+        run: python3 scripts/hf_vault_sync.py push_stage2
+
+  stage4_hybrid_qa_preview:
+    name: Stage 4 — Hybrid Vision QA (cactus.Mirage + Gemini) & Preview APK
+    needs: stage3_godot_build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_PRIVATE_DATASET_REPO: ${{ secrets.HF_PRIVATE_DATASET_REPO }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Xvfb, FFmpeg, Godot 4.7.2, Export Templates & cactus-compute
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb ffmpeg libgl1-mesa-dri unzip
+          pip install -q pillow huggingface_hub requests
+          pip install -q -U cactus-compute || true
+          mkdir -p ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_linux.x86_64.zip" -O /tmp/godot.zip
+          GODOT_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['linux_x86_64_zip'])")
+          echo "${GODOT_SHA}  /tmp/godot.zip" | sha512sum -c -
+          unzip -q -o /tmp/godot.zip -d /tmp/godot_extract
+          sudo install -m 0755 "/tmp/godot_extract/Godot_v${GODOT_VERSION_TAG}_linux.x86_64" /usr/local/bin/godot
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION_TAG}/Godot_v${GODOT_VERSION_TAG}_export_templates.tpz" -O /tmp/templates.tpz
+          TPL_SHA=$(python3 -c "import json;print(json.load(open('config/pinned_toolchains_and_checksums.json'))['godot_official_release']['sha512']['export_templates_tpz'])")
+          echo "${TPL_SHA}  /tmp/templates.tpz" | sha512sum -c -
+          unzip -q -o /tmp/templates.tpz -d /tmp/tpl_ext
+          cp -r /tmp/tpl_ext/templates/* ~/.local/share/godot/export_templates/"${GODOT_TEMPLATE_ID}"/
+      - name: Pull Stage 3 Project from HF Vault
+        run: python3 scripts/hf_vault_sync.py pull_stage2
+      - name: Run Hybrid Vision QA + 4-Cycle Craft Anything Auto-Refine (>= 85/100 Gate)
+        run: python3 scripts/v8_stage4_hybrid_qa.py
+      - name: Export Signed Preview APK (Target SDK 36, Min SDK 24, arm64-v8a)
+        run: |
+          mkdir -p build/android build/release_assets
+          xvfb-run --auto-servernum -s "-screen 0 720x1280x24" godot --path . --export-release "Android (Direct Install APK)" build/android/game_preview.apk
+          cp build/android/game_preview.apk build/release_assets/
+          cp /tmp/v8_qa/0*.png build/release_assets/
+          cp /tmp/v8_qa/*.mp4 build/release_assets/
+          cp docs/V8_HYBRID_VISION_REPORT.json build/release_assets/
+      - name: Publish Preview Release to GitHub Releases
+        run: |
+          GAME_ID=$(python3 -c "import json;print(json.load(open('docs/MASTER_GAME_BLUEPRINT.json'))['game_id'])")
+          TAG="${GAME_ID}-v8.0-preview"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/release_assets/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" build/release_assets/* --title "AI Game Studio V8.0 Preview — ${GAME_ID}" --notes "Autonomous V8.0 Preview APK + 6 HD PNGs + 4 Movie Maker MP4s + Vision QA Report (>= 85/100)." --repo "$GITHUB_REPOSITORY"
+          fi
