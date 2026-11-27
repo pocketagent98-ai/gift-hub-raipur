@@ -1,7 +1,7 @@
 extends Node
 
 # ==============================================================================
-# COMMERCIAL-GRADE 8x8 BLOCK PUZZLE ENGINE (V6.0 — GENRE: block_puzzle)
+# COMMERCIAL-GRADE 8x8 BLOCK PUZZLE ENGINE (V7.0 — GENRE: block_puzzle)
 # ==============================================================================
 
 signal level_changed(new_level: int)
@@ -43,10 +43,13 @@ const PIECE_CATALOG: Array = [
 
 var current_level: int = 1
 var level_goal: int = 450
+var target_score: int = 450
 var current_score: int = 0
 var best_score: int = 0
 var current_combo: int = 0
 var moves_made: int = 0
+var moves_left: int = 30
+var state: String = "playing"
 var fever_overdrive_active: bool = false
 var hammer_mode_active: bool = false
 
@@ -76,9 +79,12 @@ func _init_empty_board() -> void:
 func load_level(lvl_num: int) -> void:
 	current_level = clampi(lvl_num, 1, 30)
 	level_goal = 360 + (current_level - 1) * 140
+	target_score = level_goal
 	current_score = 0
 	current_combo = 0
 	moves_made = 0
+	moves_left = 30
+	state = "playing"
 	fever_overdrive_active = false
 	hammer_mode_active = false
 	juggle_hold_piece = {}
@@ -186,6 +192,7 @@ func place_tray_piece(tray_idx: int, gx: int, gy: int) -> Dictionary:
 
 	piece["used"] = true
 	moves_made += 1
+	moves_left = maxi(0, moves_left - 1)
 	last_cleared_cells.clear()
 
 	var cleared := _clear_completed_rows_and_cols()
@@ -225,6 +232,7 @@ func place_tray_piece(tray_idx: int, gx: int, gy: int) -> Dictionary:
 	emit_signal("state_changed")
 
 	if current_score >= level_goal:
+		state = "won"
 		var save_mgr := get_node_or_null("/root/SaveManager")
 		if save_mgr != null:
 			save_mgr.call("add_coins", 50)
@@ -232,6 +240,7 @@ func place_tray_piece(tray_idx: int, gx: int, gy: int) -> Dictionary:
 			aud.call("play_sfx", "victory", 5)
 		emit_signal("level_completed", current_level, current_score)
 	elif not _has_any_valid_move():
+		state = "lost"
 		emit_signal("game_over", current_score)
 
 	return {"placed": true, "lines_cleared": cleared, "score_gained": pts}
@@ -318,6 +327,35 @@ func use_hammer_at(gx: int, gy: int) -> bool:
 	emit_signal("board_updated", 1)
 	emit_signal("state_changed")
 	return true
+
+func use_booster(kind: String) -> bool:
+	if kind == "hammer":
+		return use_hammer_at(3, 3)
+	return use_juggle_swap()
+
+func add_moves(count: int) -> void:
+	moves_left += maxi(1, count)
+	juggle_swaps_remaining += 1
+	emit_signal("state_changed")
+
+func load_single_chunk(chunk_id: int) -> void:
+	load_level(clampi(chunk_id, 1, 30))
+
+func test_stitched_chunks(chunk_order: Array) -> void:
+	for cid in chunk_order:
+		load_single_chunk(int(cid))
+
+func get_snapshot() -> Dictionary:
+	return {
+		"genre": GENRE,
+		"level": current_level,
+		"score": current_score,
+		"target_score": target_score,
+		"combo": current_combo,
+		"moves_made": moves_made,
+		"moves_left": moves_left,
+		"state": state,
+	}
 
 func bot_play_step() -> String:
 	for i in range(tray_pieces.size()):
