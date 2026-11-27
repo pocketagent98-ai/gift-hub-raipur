@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Deterministic clean-room genre factory for the AI Game Studio V5.0 pipeline.
+"""Deterministic clean-room genre factory for the AI Game Studio V7.0 pipeline.
 
-The factory turns ORDER.md + the live NVIDIA NIM design blueprint into a
-complete, self-contained, playable Godot 4.7 project. It never copies reference
-game files; every scene, script, theme value, shop item, and level name is
-authored from the studio templates and the validated AI blueprint.
+Supports block_puzzle, screw_puzzle, and match_3 using clean-room Godot 4.7.2 templates
+and live NVIDIA NIM design blueprints. Zero third-party asset copying.
 """
 from __future__ import annotations
 
@@ -12,36 +10,43 @@ import argparse
 import hashlib
 import json
 import re
-import shutil
 from pathlib import Path
 from typing import Any, Dict
 
 import ai_game_designer
 
 GENRE_TEMPLATES = {
+    "block_puzzle": "game_manager_block_puzzle.gd.tmpl",
     "match_3": "game_manager_match3.gd.tmpl",
     "screw_puzzle": "game_manager_screw.gd.tmpl",
 }
 
 GENRE_ALIASES = {
+    "block_puzzle": "block_puzzle", "block_blast": "block_puzzle", "block": "block_puzzle",
     "match_3": "match_3", "match3": "match_3", "match-3": "match_3", "candy": "match_3",
     "screw_puzzle": "screw_puzzle", "screw": "screw_puzzle", "screw_jam": "screw_puzzle", "bolt": "screw_puzzle",
 }
 
-GENRE_TITLES = {"match_3": "Sugar Cascade", "screw_puzzle": "Bolt Master"}
+GENRE_TITLES = {
+    "block_puzzle": "Crystal Grid Cascade",
+    "match_3": "Sugar Cascade",
+    "screw_puzzle": "Hexa Bolt Craft",
+}
+
 GENRE_DESCRIPTIONS = {
+    "block_puzzle": "Clean-room 8x8 crystal block puzzle with drag-and-drop, ghost preview, hold swap, hammer smash, and 30 levels.",
     "match_3": "Clean-room match-3 crystal cascade with special candies, combos, shop, and 30 levels.",
     "screw_puzzle": "Clean-room layered screw puzzle with colored tools, rusted bolts, shop, and 30 levels.",
 }
 
 SHARED_TEMPLATES = {
-    "analytics_manager.gd": "scripts/analytics_manager.gd",
     "save_manager.gd": "scripts/save_manager.gd",
     "audio_director.gd": "scripts/audio_director.gd",
     "monetization_manager.gd": "scripts/monetization_manager.gd",
+    "analytics_manager.gd": "scripts/analytics_manager.gd",
     "procedural_polish_theme_and_vfx.gd": "scripts/procedural_polish_theme_and_vfx.gd",
-    "ui_controller.gd": "scripts/ui_controller.gd",
     "board_view.gd": "scripts/board_view.gd",
+    "ui_controller.gd": "scripts/ui_controller.gd",
     "main_scene.gd": "scripts/main_scene.gd",
     "qa_bootstrap.gd": "scripts/qa_bootstrap.gd",
     "deep_game_verifier_bot.gd": "scripts/deep_game_verifier_bot.gd",
@@ -53,6 +58,7 @@ GENERATED_FILES = [
     "project.godot",
     "main.tscn",
     "export_presets.cfg",
+    "icon.svg",
     "scenes/ui_root.tscn",
     "scenes/qa_bootstrap.tscn",
     "scripts/app_config.gd",
@@ -110,9 +116,9 @@ def resolve_job(project_root: Path) -> Dict[str, Any]:
     job_path = project_root / "docs" / "resolved_job.json"
     job = json.loads(job_path.read_text(encoding="utf-8")) if job_path.exists() else {}
 
-    game_id = _field(order_txt, "GAME_ID", str(job.get("game_id", "studio_game_01")))
-    raw_genre = _field(order_txt, "GENRE", str(job.get("genre", "match_3"))).strip().lower()
-    genre = GENRE_ALIASES.get(raw_genre, raw_genre or "match_3")
+    game_id = _field(order_txt, "GAME_ID", str(job.get("game_id", "block_blast_studio_01")))
+    raw_genre = _field(order_txt, "GENRE", str(job.get("genre", "block_puzzle"))).strip().lower()
+    genre = GENRE_ALIASES.get(raw_genre, raw_genre or "block_puzzle")
     if genre not in GENRE_TEMPLATES:
         raise RuntimeError(
             f"[FACTORY_FAIL_CLOSED] Genre '{raw_genre}' has no real playable generator yet. "
@@ -157,7 +163,7 @@ def resolve_job(project_root: Path) -> Dict[str, Any]:
 def _template(project_root: Path, name: str) -> str:
     path = project_root / "templates" / name
     if not path.exists():
-        raise FileNotFoundError(f"[FACTORY_FAIL] Missing template: {path}")
+        raise FileNotFoundError(f"Missing studio template: {path}")
     return path.read_text(encoding="utf-8")
 
 
@@ -212,45 +218,68 @@ encrypt_directory=false
 '''
     return f'''[preset.0]
 
-name="Android (Play Store Signed AAB)"
-platform="Android"
-runnable=true
-dedicated_server=false
-custom_features=""
-export_filter="all_resources"
-include_filter=""
-exclude_filter="{exclude}"
-export_path="build/android/game_release.aab"
-
-[preset.0.options]
-
-gradle_build/export_format=1
-{common}
-[preset.1]
-
 name="Android (Direct Install APK)"
 platform="Android"
 runnable=true
+advanced_options=false
 dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter=""
 exclude_filter="{exclude}"
 export_path="build/android/game_install.apk"
+patches=PackedStringArray()
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.0.options]
+
+gradle_build/export_format=0
+{common}
+[preset.1]
+
+name="Android (Play Store Signed AAB)"
+platform="Android"
+runnable=true
+advanced_options=false
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter="{exclude}"
+export_path="build/android/game_release.aab"
+patches=PackedStringArray()
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
 
 [preset.1.options]
 
-gradle_build/export_format=0
+gradle_build/export_format=1
 {common}'''
 
 
 def _icon_svg(job: Dict[str, Any], blueprint: Dict[str, Any]) -> str:
     theme = blueprint.get("theme", {})
-    accent = str(theme.get("accent", "#FF4D9D"))
+    accent = str(theme.get("accent", "#38BDF8"))
     accent2 = str(theme.get("accent_2", "#FFD447"))
-    bg_top = str(theme.get("bg_top", "#24103D"))
-    bg_bottom = str(theme.get("bg_bottom", "#090B22"))
-    if job["genre"] == "match_3":
+    bg_top = str(theme.get("bg_top", "#1E293B"))
+    bg_bottom = str(theme.get("bg_bottom", "#0F172A"))
+    if job["genre"] == "block_puzzle":
+        inner = (
+            f'<rect x="52" y="52" width="68" height="68" rx="14" fill="{accent}"/>'
+            f'<rect x="136" y="52" width="68" height="68" rx="14" fill="{accent2}"/>'
+            f'<rect x="52" y="136" width="68" height="68" rx="14" fill="#3DDC84"/>'
+            f'<rect x="136" y="136" width="68" height="68" rx="14" fill="#FB5668"/>'
+        )
+    elif job["genre"] == "match_3":
         inner = (
             f'<circle cx="98" cy="100" r="44" fill="{accent}"/>'
             f'<circle cx="84" cy="86" r="15" fill="#FFFFFF" opacity="0.65"/>'
@@ -280,17 +309,18 @@ def _icon_svg(job: Dict[str, Any], blueprint: Dict[str, Any]) -> str:
 
 
 def _ui_spec(job: Dict[str, Any], blueprint: Dict[str, Any]) -> Dict[str, Any]:
-    screens = []
-    for screen_id, widgets in UI_SCREEN_WIDGETS.items():
-        screens.append({
+    screens = [
+        {
             "screen_id": screen_id,
             "widgets": widgets,
             "element_count": len(widgets),
             "container_type": "Full-rect Control -> MarginContainer -> VBoxContainer / GridContainer",
             "evidence_tag": "GENERATED_FROM_REAL_UI_CODE",
-        })
+        }
+        for screen_id, widgets in UI_SCREEN_WIDGETS.items()
+    ]
     return {
-        "schema_version": "5.0",
+        "schema_version": "7.0",
         "game_id": job["game_id"],
         "genre": job["genre"],
         "title": job["title"],
@@ -322,7 +352,6 @@ def _ui_spec(job: Dict[str, Any], blueprint: Dict[str, Any]) -> Dict[str, Any]:
 def build_game(project_root: Path) -> Dict[str, Any]:
     job = resolve_job(project_root)
     genre = job["genre"]
-
     for relative in GENERATED_FILES:
         target = project_root / relative
         if target.exists() and target.is_file():
@@ -391,8 +420,12 @@ def build_game(project_root: Path) -> Dict[str, Any]:
     return manifest
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-root", default=".")
     args = parser.parse_args()
     build_game(Path(args.project_root).resolve())
+
+
+if __name__ == "__main__":
+    main()
