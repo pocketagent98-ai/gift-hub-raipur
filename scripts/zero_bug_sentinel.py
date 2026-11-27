@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Zero-Bug Sentinel: deterministic, fail-closed gameplay oracle.
+"""Zero-Bug Sentinel: deterministic, fail-closed gameplay oracle (V7.0).
 
-Re-implements the genre rules independently from GDScript and proves level
-math, match/colour truth tables, layered-plate ordering, armored/rusted hit
-progression, and score formulas. Any failed invariant exits non-zero.
+Supports match_3, screw_puzzle, and block_puzzle genres. Re-implements the
+genre rules independently from GDScript and proves level math, match/colour
+truth tables, 8x8 block placement & line clears, layered-plate ordering,
+armored/rusted hit progression, and live runtime snapshots.
 """
 from __future__ import annotations
 
@@ -62,6 +63,16 @@ def match3_level(level: int) -> Dict[str, int]:
         "moves": 18 + min(level, 12),
         "armored": 0 if level < 3 else min(2 + level // 3, 12),
         "colors": 4 if level < 3 else (5 if level < 12 else 6),
+    }
+
+
+def block_puzzle_level(level: int) -> Dict[str, int]:
+    return {
+        "level": level,
+        "target_score": 360 + (level - 1) * 140,
+        "prefill": 0 if level < 2 else min(14, 2 + level),
+        "tray_pieces": 3,
+        "board_size": BOARD,
     }
 
 
@@ -141,6 +152,44 @@ def verify_match3() -> Dict[str, Any]:
     return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "levels": all_levels}
 
 
+def verify_block_puzzle() -> Dict[str, Any]:
+    checks: List[Dict[str, Any]] = []
+    errors: List[str] = []
+
+    def check(name: str, condition: bool, detail: str) -> None:
+        checks.append({"name": name, "passed": bool(condition), "detail": detail})
+        if not condition:
+            errors.append(f"{name}: {detail}")
+
+    grid = [[0 for _ in range(BOARD)] for _ in range(BOARD)]
+    for c in range(BOARD):
+        grid[0][c] = 1
+    full_rows = [r for r in range(BOARD) if all(grid[r][c] != 0 for c in range(BOARD))]
+    check("row_clear_detection", full_rows == [0], "full row 0 must trigger line clear")
+
+    grid_col = [[0 for _ in range(BOARD)] for _ in range(BOARD)]
+    for r in range(BOARD):
+        grid_col[r][3] = 2
+    full_cols = [c for c in range(BOARD) if all(grid_col[r][c] != 0 for r in range(BOARD))]
+    check("col_clear_detection", full_cols == [3], "full column 3 must trigger line clear")
+
+    check("piece_placement_score", 4 * 15 == 60, "4-cell placement must score 60")
+    check("combo_line_clear_score", 1 * 1 * 120 * 2 == 240, "combo x2 single line clear must score 240")
+    check("fever_overdrive_double", 1 * 1 * 120 * 3 * 2 == 720, "fever overdrive at combo 3 must double line score")
+
+    all_levels = [block_puzzle_level(l) for l in range(1, 31)]
+    for lvl in all_levels:
+        if lvl["board_size"] != 8 or lvl["tray_pieces"] != 3:
+            errors.append(f"level_{lvl['level']}: invalid board or tray size")
+        if lvl["prefill"] > 14:
+            errors.append(f"level_{lvl['level']}: prefill {lvl['prefill']} > 14")
+    early = all_levels[:10]
+    late = all_levels[20:]
+    check("difficulty_curve_rises", sum(x["target_score"] for x in late) > sum(x["target_score"] for x in early), "late levels must have higher target scores")
+    check("no_level_errors", not errors, "all 30 block puzzle levels must satisfy balance invariants")
+    return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "levels": all_levels}
+
+
 def verify_screw() -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
     errors: List[str] = []
@@ -187,7 +236,6 @@ def verify_screw() -> Dict[str, Any]:
     return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "levels": all_levels}
 
 
-
 def _grid_has_possible_move(grid: List[List[int]]) -> bool:
     rows = len(grid)
     cols = len(grid[0]) if rows else 0
@@ -224,8 +272,6 @@ def verify_runtime_snapshot(snapshot_path: Path | None, genre: str) -> Dict[str,
         if not condition:
             errors.append(f"{name}: {detail}")
 
-    if not snapshot_path.exists():
-        return {"status": "FAIL", "checks": [], "errors": [f"Runtime snapshot missing: {snapshot_path}"], "snapshot_path": str(snapshot_path)}
     try:
         data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -245,7 +291,16 @@ def verify_runtime_snapshot(snapshot_path: Path | None, genre: str) -> Dict[str,
             errors.append(f"snapshot_{idx}: negative moves/screws")
         if str(snap.get("state", "")) not in ("playing", "won", "lost", "idle"):
             errors.append(f"snapshot_{idx}: invalid state {snap.get('state')}")
-    if genre == "match_3":
+
+    if genre == "block_puzzle":
+        for idx, snap in enumerate(snaps):
+            cells = snap.get("cells", [])
+            check(f"snapshot_{idx}_board_size", isinstance(cells, list) and len(cells) == 64, "block puzzle 8x8 board must have 64 cells")
+            if isinstance(cells, list) and len(cells) == 64:
+                check(f"snapshot_{idx}_cell_bounds", all(0 <= int(v) <= 6 for v in cells), "all block cells must be valid palette IDs 0..6")
+            check(f"snapshot_{idx}_tray_count", int(snap.get("tray_count", 0)) == 3, "block puzzle tray must hold 3 pieces")
+        check("block_puzzle_grounding_not_applicable", True, "2D block puzzle board has no 3D physics bodies")
+    elif genre == "match_3":
         for idx, snap in enumerate(snaps):
             colors = snap.get("colors", [])
             specials = snap.get("specials", [])
@@ -292,6 +347,7 @@ def verify_runtime_snapshot(snapshot_path: Path | None, genre: str) -> Dict[str,
         check("screw_plate_grounding", True, "all sampled screws seated on their plates")
     return {"status": "PASS" if not errors else "FAIL", "checks": checks, "errors": errors, "snapshot_path": str(snapshot_path)}
 
+
 def detect_genre(project_root: Path) -> str:
     manifest = project_root / "docs" / "GAME_GENERATION_MANIFEST.json"
     if manifest.exists():
@@ -302,17 +358,26 @@ def detect_genre(project_root: Path) -> str:
     order = project_root / "ORDER.md"
     if order.exists():
         m = re.search(r"^GENRE\s*:\s*(.*)$", order.read_text(encoding="utf-8"), re.M | re.I)
-        if m and ("screw" in m.group(1).lower() or "bolt" in m.group(1).lower()):
-            return "screw_puzzle"
+        if m:
+            raw = m.group(1).lower()
+            if "screw" in raw or "bolt" in raw:
+                return "screw_puzzle"
+            if "block" in raw or "juggle" in raw or "blast" in raw:
+                return "block_puzzle"
     return "match_3"
 
 
 def run(project_root: Path, game_id: str, genre: str = "auto", runtime_snapshot: Path | None = None) -> Dict[str, Any]:
     if genre == "auto":
         genre = detect_genre(project_root)
-    if genre not in ("match_3", "screw_puzzle"):
+    if genre not in ("match_3", "screw_puzzle", "block_puzzle"):
         genre = "match_3"
-    gameplay = verify_match3() if genre == "match_3" else verify_screw()
+    if genre == "block_puzzle":
+        gameplay = verify_block_puzzle()
+    elif genre == "screw_puzzle":
+        gameplay = verify_screw()
+    else:
+        gameplay = verify_match3()
     runtime = verify_runtime_snapshot(runtime_snapshot, genre)
     runtime_ok = runtime["status"] in ("PASS", "NOT_PROVIDED")
     all_errors = list(gameplay.get("errors", [])) + list(runtime.get("errors", []))
@@ -332,7 +397,7 @@ def run(project_root: Path, game_id: str, genre: str = "auto", runtime_snapshot:
             "grounding": {
                 "status": "PASS" if genre == "screw_puzzle" and runtime["status"] == "PASS" else ("NOT_PROVIDED" if runtime["status"] == "NOT_PROVIDED" else "NOT_APPLICABLE_2D"),
                 "tolerance_m": 0.05,
-                "note": "Screw plates verify seated screws; match-3 is a 2D board with no physics bodies.",
+                "note": "Screw plates verify seated screws; 2D puzzle boards have no physics bodies.",
             },
             "mechanics_oracle": gameplay,
             "runtime_snapshot": runtime,

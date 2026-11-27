@@ -15,6 +15,8 @@ const GENRE: String = "block_puzzle"
 const GAME_TITLE: String = "__GAME_TITLE__"
 const BOARD_SIZE: int = 8
 
+var genre: String = "block_puzzle"
+
 const PALETTE: Array[Color] = [
 	Color(0.0, 0.0, 0.0, 0.0),
 	Color(0.98, 0.32, 0.42),
@@ -50,6 +52,7 @@ var current_combo: int = 0
 var moves_made: int = 0
 var moves_left: int = 30
 var state: String = "playing"
+var armored_block_hp: int = 4
 var fever_overdrive_active: bool = false
 var hammer_mode_active: bool = false
 
@@ -85,6 +88,7 @@ func load_level(lvl_num: int) -> void:
 	moves_made = 0
 	moves_left = 30
 	state = "playing"
+	armored_block_hp = 4
 	fever_overdrive_active = false
 	hammer_mode_active = false
 	juggle_hold_piece = {}
@@ -338,6 +342,21 @@ func add_moves(count: int) -> void:
 	juggle_swaps_remaining += 1
 	emit_signal("state_changed")
 
+func apply_hit_to_target(hit_power: int = 1) -> Dictionary:
+	armored_block_hp = maxi(0, armored_block_hp - maxi(1, hit_power))
+	var shattered := (armored_block_hp == 0)
+	if shattered:
+		current_score += 80
+		armored_block_hp = 4
+	else:
+		current_score += 20
+	var aud := get_node_or_null("/root/AudioDirector")
+	if aud != null:
+		aud.call("play_sfx", "armor_crack", 2)
+	emit_signal("score_changed", current_score, current_combo)
+	emit_signal("state_changed")
+	return {"remaining_hp": armored_block_hp, "shattered": shattered, "score": current_score}
+
 func load_single_chunk(chunk_id: int) -> void:
 	load_level(clampi(chunk_id, 1, 30))
 
@@ -346,6 +365,10 @@ func test_stitched_chunks(chunk_order: Array) -> void:
 		load_single_chunk(int(cid))
 
 func get_snapshot() -> Dictionary:
+	var flat_cells: Array = []
+	for r in range(BOARD_SIZE):
+		for c in range(BOARD_SIZE):
+			flat_cells.append(int(grid_8x8[r][c]))
 	return {
 		"genre": GENRE,
 		"level": current_level,
@@ -355,6 +378,8 @@ func get_snapshot() -> Dictionary:
 		"moves_made": moves_made,
 		"moves_left": moves_left,
 		"state": state,
+		"cells": flat_cells,
+		"tray_count": tray_pieces.size(),
 	}
 
 func bot_play_step() -> String:
@@ -383,4 +408,5 @@ func step_mechanics_lab_test() -> String:
 		grid_8x8[0][c] = 2
 	tray_pieces[0] = {"cells": [Vector2i(0, 0)], "color_id": 4, "used": false}
 	var res := place_tray_piece(0, 7, 0)
-	return "MECHANICS_LAB_PASS: Placed=%s | LinesCleared=%d | Score=%d" % [str(res.get("placed", false)), int(res.get("lines_cleared", 0)), current_score]
+	var hit_res := apply_hit_to_target(1)
+	return "MECHANICS_LAB_PASS: Placed=%s | LinesCleared=%d | ArmoredHP=%d | Score=%d" % [str(res.get("placed", false)), int(res.get("lines_cleared", 0)), int(hit_res.get("remaining_hp", 0)), current_score]
