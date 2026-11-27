@@ -1,0 +1,24 @@
+{
+  "schema_version": "7.0",
+  "studio_mode": "clean_room_original",
+  "games": {
+    "game_1": {
+      "game_id": "block_blast_studio_01",
+      "game_version": "v1.0.0",
+      "genre": "block_puzzle",
+      "title": "Crystal Grid Cascade",
+      "package_name": "com.aistudio.crystalgridcascade",
+      "playstore_reference_link": "https://play.google.com/store/apps/details?id=com.block.juggle",
+      "prompt": "Build a 100% original, commercial-grade, ultra-juicy 8x8 Block Puzzle mobile game in Godot 4.7.2 inspired by public player reviews of Block Blast. Include smooth drag-and-drop and tap-to-place controls, live ghost preview, glowing row/column clear cascades, combo multipliers, Juggle Hold swap slot, Hammer 3x3 smash booster, 30 progressive levels + Endless mode, glossy 3D-style bevelled jewel blocks, musical marimba SFX, zero clipped UI text, and fair offline-safe AdMob + IAP hooks."
+    },
+    "game_2": {
+      "game_id": "bolt_master_studio_02",
+      "game_version": "v1.0.0",
+      "genre": "screw_puzzle",
+      "title": "Hexa Bolt Craft",
+      "package_name": "com.aistudio.hexaboltcraft",
+      "playstore_reference_link": "https://play.google.com/store/apps/details?id=com.quok.screwJam",
+      "prompt": "Build a 100% original, commercial-grade Screw & Layered Plate Puzzle mobile game in Godot 4.7.2 inspired by public player reviews of Screw Jam. Include color-matched screw removal, layered metallic/wood plates with falling physics feedback, active toolbox slots + temporary buffer slots, Drill and Magnet boosters, 30 progressive handcrafted levels, tactile sound effects, zero clipped UI text across 12 mobile screens, and fair offline-safe AdMob + IAP hooks."
+    }
+  }
+}

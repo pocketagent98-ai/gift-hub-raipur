@@ -1,8 +1,6 @@
----
-name: replica-recon
-description: Temporary Reference Game Screen, Flow & Mechanic Reconnaissance
-status: TEMPORARY
----
-# Replica-Recon (Temporary Reference Research Only)
-- Map every observable screen, button, icon, position, size, color palette, and state transition from reference screenshots/videos/APKs.
-- Tag every observation strictly as `VERIFIED`, `OBSERVED`, `INFERRED`, or `UNKNOWN`.
+# Skill: Replica Recon (Clean-Room Genre & Market Spec Only)
+Source: `Jakeschincariol/replica-skill` (`replica-recon`)
+
+Active rules (Stage 1 ONLY — never writes game code):
+- Analyze public Play Store listing metadata, genre mechanics, monetization expectations (fair rewarded ads, optional IAP bundles, non-intrusive interstitial cadence), and level progression patterns.
+- Output structured clean-room specs for the game studio builders.

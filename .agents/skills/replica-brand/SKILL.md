@@ -1,7 +1,5 @@
----
-name: replica-brand
-description: Temporary Clean-Room Brand, Trademark & Asset Differentiation Auditor
-status: TEMPORARY
----
-# Replica-Brand (Clean-Room Differentiation Gate)
-- Ensure 0% reuse of reference game titles, developer names, logos, proprietary icons, or copyrighted audio/meshes.
+# Skill: Replica Brand (Original Naming & Store Identity)
+Source: `Jakeschincariol/replica-skill` (`replica-brand`)
+
+Active rules (Stage 5 ONLY):
+- Create a 100% original, trademark-safe game title, short tagline, and visual icon/banner theme completely distinct from any reference app.

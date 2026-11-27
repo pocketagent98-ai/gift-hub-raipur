@@ -1,0 +1,31 @@
+{
+  "router_version": "7.0",
+  "load_policy": "on_demand_stage_scoped",
+  "max_skills_per_prompt": 3,
+  "routes": {
+    "stage1": [
+      ".agents/skills/replica-recon/SKILL.md",
+      ".agents/skills/replica-entrepreneur/SKILL.md",
+      ".agents/skills/craft-anything/SKILL.md"
+    ],
+    "stage2": [
+      ".agents/skills/everything-game-dev-code/SKILL.md",
+      ".agents/skills/gamestudio-bullish0x/SKILL.md"
+    ],
+    "stage3": [
+      ".agents/skills/awesome-gamedev-agent-skills/SKILL.md",
+      ".agents/skills/gamestudio-bullish0x/SKILL.md",
+      ".agents/skills/everything-game-dev-code/SKILL.md",
+      ".agents/skills/godogen/SKILL.md"
+    ],
+    "stage4": [
+      ".agents/skills/studio-polish-director/SKILL.md",
+      ".agents/skills/replica-diff/SKILL.md"
+    ],
+    "stage5": [
+      ".agents/skills/security-audit/SKILL.md",
+      ".agents/skills/replica-brand/SKILL.md",
+      ".agents/skills/replica-launch/SKILL.md"
+    ]
+  }
+}

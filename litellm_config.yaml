@@ -1,110 +1,86 @@
 model_list:
-  # =====================================================================
-  # 1. GAME BIBLE, ART BIBLE & CORE ARCHITECT (Starred NVIDIA Models + Kimi K3.1 Pro + Gemma 4 31B)
-  # =====================================================================
-  - model_name: studio-kimi-architect
-    litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 20
-      max_retries: 3
-      timeout: 120
-
+  # --- Provider 1: NVIDIA NIM (Private Architecture, Coding, Polish & Safety) ---
   - model_name: studio-architect
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 20
+      model: openai/nvidia/nemotron-3-ultra-550b-a55b
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-architect
+  - model_name: studio-core-coder
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-4-340b-instruct
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 15
+      model: openai/nvidia/nemotron-4-340b-instruct
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-architect
+  - model_name: studio-long-context
     litellm_params:
-      model: nvidia_nim/moonshotai/kimi-k3.1-pro
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 15
+      model: openai/moonshotai/kimi-k3.1-pro
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-architect
+  - model_name: studio-balanced-coder
     litellm_params:
-      model: gemini/gemma-4-31b-it
-      api_key: os.environ/GEMINI_API_KEY
-      rpm: 30
+      model: openai/nvidia/nemotron-3-super-120b-a12b
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  # =====================================================================
-  # 2. STUDIO FAST CODER & SUB-AGENTS (Starred NVIDIA Coding Models + Gemma 4 31B)
-  # =====================================================================
-  - model_name: studio-coder
+  - model_name: studio-fast-patch
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3-super-120b-a12b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 20
+      model: openai/nvidia/nemotron-3.5-lightning-30b-a3b
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-coder
+  - model_name: studio-reward-judge
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 20
+      model: openai/nvidia/nemotron-4-340b-reward
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-coder
+  - model_name: studio-content-safety
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-nano-3-30b-a3b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 20
+      model: openai/nvidia/nemotron-3.5-content-safety
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  - model_name: studio-coder
+  - model_name: studio-omni-backup-qa
     litellm_params:
-      model: gemini/gemma-4-31b-it
-      api_key: os.environ/GEMINI_API_KEY
-      rpm: 30
+      model: openai/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      rpm: 35
 
-  # =====================================================================
-  # 3. PART-BY-PART FRAME & VIDEO QA (Gemini 3.5/3.1 Flash Lite + Starred NVIDIA Omni 30B)
-  # =====================================================================
-  - model_name: studio-frame-qa
+  # --- Provider 2: Google Gemini API (Multimodal Video/Image QA & Decision Gate) ---
+  - model_name: studio-video-qa-primary
     litellm_params:
       model: gemini/gemini-3.5-flash-lite
       api_key: os.environ/GEMINI_API_KEY
-      rpm: 15
+      rpm: 12
 
-  - model_name: studio-frame-qa
+  - model_name: studio-video-qa-secondary
     litellm_params:
       model: gemini/gemini-3.1-flash-lite
       api_key: os.environ/GEMINI_API_KEY
-      rpm: 15
+      rpm: 12
 
-  - model_name: studio-frame-qa
+  - model_name: studio-decision-gate
     litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-      rpm: 15
-
-  # =====================================================================
-  # 4. REWARD JUDGE, EMBEDDING & PLAY STORE CONTENT SAFETY (Starred NVIDIA Models)
-  # =====================================================================
-  - model_name: studio-reward
-    litellm_params:
-      model: nvidia_nim/nvidia/nemotron-4-340b-reward
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-
-  - model_name: studio-safety
-    litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3.5-content-safety
-      api_key: os.environ/NVIDIA_NIM_API_KEY
-
-  - model_name: studio-embed
-    litellm_params:
-      model: nvidia_nim/nvidia/nemotron-3-embed-1b
-      api_key: os.environ/NVIDIA_NIM_API_KEY
+      model: gemini/gemini-decision-1
+      api_key: os.environ/GEMINI_API_KEY
+      rpm: 150
 
 router_settings:
-  routing_strategy: usage-based-routing-v2
-  num_retries: 5
-  cooldown_time: 15
-  allowed_fails: 2
+  routing_strategy: simple-shuffle
+  num_retries: 3
+  timeout: 60
+  cooldown_time: 30
   fallbacks:
-    - {"studio-kimi-architect": ["studio-architect", "studio-coder"]}
-    - {"studio-architect": ["studio-coder"]}
+    - studio-architect: [studio-balanced-coder, studio-fast-patch]
+    - studio-core-coder: [studio-architect, studio-balanced-coder, studio-fast-patch]
+    - studio-video-qa-primary: [studio-video-qa-secondary, studio-omni-backup-qa]

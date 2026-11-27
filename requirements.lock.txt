@@ -1,9 +1,7 @@
-# Pinned Dependencies for AI Game Studio V2.0 Supply-Chain Security
-litellm==1.78.0
-openai==1.109.1
-google-genai==1.10.0
+PyYAML==6.0.2
 google-play-scraper==1.2.7
 huggingface_hub==0.34.4
-pypdf==5.4.0
-cryptography==43.0.3
+Pillow==11.0.0
 imageio-ffmpeg==0.5.1
+google-genai==1.10.0
+cryptography==43.0.3
