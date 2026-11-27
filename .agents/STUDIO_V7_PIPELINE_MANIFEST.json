@@ -1,0 +1,12 @@
+{
+  "studio_version": "7.0.0",
+  "engine": "Godot 4.7.2-stable (FULL GUI under Xvfb)",
+  "clean_room_policy": "100% original code, assets, audio, and branding. Public Play Store metadata & user reviews only.",
+  "stages": [
+    {"id": "stage1_research_blueprint", "skills": ["replica-recon", "replica-entrepreneur", "craft-anything"]},
+    {"id": "stage2_original_assets", "skills": ["everything-game-dev-code", "gamestudio-bullish0x"]},
+    {"id": "stage3_ai_game_build", "skills": ["awesome-gamedev-agent-skills", "gamestudio-bullish0x", "everything-game-dev-code", "godogen"]},
+    {"id": "stage4_qa_and_preview", "skills": ["studio-polish-director", "replica-diff"]},
+    {"id": "stage5_approve_release", "skills": ["security-audit", "replica-brand", "replica-launch"]}
+  ]
+}

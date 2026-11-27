@@ -1,37 +1,26 @@
-{
-  "studio_version": "7.0.0",
-  "engine": "Godot 4.7.2-stable (FULL GUI under Xvfb)",
-  "clean_room_policy": "100% original code, assets, audio, and branding. Public Play Store metadata & user reviews only. Zero third-party APK extraction or copyrighted asset copying.",
-  "stages": [
-    {
-      "id": "stage1_research_blueprint",
-      "role": "Public Play Store review intelligence + Clean-Room 6 Game Bibles",
-      "skills": ["replica-recon", "replica-entrepreneur", "craft-anything"],
-      "llm_route": "gemini-decision-1 + NVIDIA NIM (nemotron-3-ultra-550b)"
-    },
-    {
-      "id": "stage2_original_assets",
-      "role": "100% original procedural HD textures, icons, musical WAV audio + Gemini visual QA",
-      "skills": ["everything-game-dev-code", "gamestudio-bullish0x"],
-      "llm_route": "NVIDIA NIM (nemotron-3-super-120b) + Gemini (gemini-3.5-flash-lite)"
-    },
-    {
-      "id": "stage3_ai_game_build",
-      "role": "Multi-agent Godot 4.7.2 mobile game builder + 3-cycle Godot GUI self-heal",
-      "skills": ["awesome-gamedev-agent-skills", "gamestudio-bullish0x", "everything-game-dev-code", "godogen"],
-      "llm_route": "NVIDIA NIM private route only (Anti-429 paced)"
-    },
-    {
-      "id": "stage4_qa_and_preview",
-      "role": "Xvfb automated playtesting + 4 Movie Maker MP4 videos + Vision QA + Preview APK",
-      "skills": ["studio-polish-director", "replica-diff"],
-      "llm_route": "gemini-3.5-flash-lite -> gemini-3.1-flash-lite -> nemotron-3-nano-omni"
-    },
-    {
-      "id": "stage5_approve_release",
-      "role": "Human-approved Play Store safety audit + AES-256 encryption + Signed APK & AAB + Store-Kit",
-      "skills": ["security-audit", "replica-brand", "replica-launch"],
-      "llm_route": "nemotron-3.5-content-safety + nemotron-3-super-120b"
-    }
-  ]
-}
+[
+  {"id": 1, "name": "Reference Research Agent", "output": "docs/game_identity_report.json", "check": ["scripts/deep_game_intelligence.py"]},
+  {"id": 2, "name": "Play Store Intelligence Agent", "output": "docs/game_identity_report.json", "check": ["scripts/playstore_cleanroom_recon.py"]},
+  {"id": 3, "name": "APK Analysis Agent", "output": "docs/apk_and_source_archaeology.json", "check": ["scripts/apk_and_source_archaeologist.py"]},
+  {"id": 4, "name": "Source Code Archaeologist", "output": "docs/apk_and_source_archaeology.json", "check": ["scripts/apk_and_source_archaeologist.py"]},
+  {"id": 5, "name": "Gameplay Reverse-Engineering Analyst", "output": "docs/sample_dossier/REFERENCE_INTELLIGENCE_DOSSIER.md", "check": ["scripts/generate_intelligence_dossier.py"]},
+  {"id": 6, "name": "Video and Screen Analysis Agent", "output": "scripts/multi_video_inspector.py", "check": ["scripts/multi_video_inspector.py"]},
+  {"id": 7, "name": "Review Intelligence Agent", "output": "docs/review_intelligence_report.json", "check": ["scripts/review_intelligence.py"]},
+  {"id": 8, "name": "Game Design Director", "output": "docs/mechanics_contract.json", "check": ["docs/mechanics_contract.json"]},
+  {"id": 9, "name": "Original IP and Differentiation Agent", "output": "docs/sample_dossier/REFERENCE_INTELLIGENCE_DOSSIER.md", "check": [".agents/rules/STUDIO_RULES.md"]},
+  {"id": 10, "name": "Technical Architect", "output": "project.godot", "check": ["project.godot", "dsh_config.json"]},
+  {"id": 11, "name": "Godot Gameplay Engineer", "output": "scripts/game_manager.gd", "check": ["scripts/game_manager.gd", "scripts/save_manager.gd"]},
+  {"id": 12, "name": "Physics and Controls Engineer", "output": "scripts/game_manager.gd", "check": ["scripts/godot_legacy_code_scanner.py"]},
+  {"id": 13, "name": "Level and Economy Designer", "output": "main.tscn", "check": ["main.tscn", "scripts/analytics_manager.gd"]},
+  {"id": 14, "name": "2D/3D Asset Director", "output": "scripts/procedural_3d_factory.gd", "check": ["scripts/procedural_3d_factory.gd", "scripts/asset_validator.py"]},
+  {"id": 15, "name": "UI/UX Designer", "output": "scripts/ui_controller.gd", "check": ["scripts/ui_controller.gd"]},
+  {"id": 16, "name": "Animation and VFX Specialist", "output": "scripts/procedural_polish_theme_and_vfx.gd", "check": ["scripts/procedural_polish_theme_and_vfx.gd"]},
+  {"id": 17, "name": "Audio Specialist", "output": "scripts/audio_director.gd", "check": ["scripts/audio_director.gd"]},
+  {"id": 18, "name": "Studio Polish Director", "output": "docs/ART_DIRECTION_BIBLE.md", "check": ["scripts/studio_polish_director.py"]},
+  {"id": 19, "name": "Monetization and Privacy Specialist", "output": "scripts/monetization_manager.gd", "check": ["scripts/monetization_manager.gd", "scripts/app_config.gd"]},
+  {"id": 20, "name": "Mobile Performance Engineer", "output": "scripts/resource_quota_guard.py", "check": ["scripts/resource_quota_guard.py"]},
+  {"id": 21, "name": "QA and Test Automation Agent", "output": "scenes/qa_bootstrap.tscn", "check": ["scenes/qa_bootstrap.tscn", "scripts/deep_game_verifier_bot.gd"]},
+  {"id": 22, "name": "Security and License Auditor", "output": "docs/THIRD_PARTY_NOTICES.md", "check": ["scripts/studio_healer_and_compliance.py", "scripts/license_and_sdk_audit.py"]},
+  {"id": 23, "name": "Independent Quality Reviewer", "output": "docs/STUDIO_POLISH_REPORT.md", "check": ["scripts/independent_polish_reviewer.py"]},
+  {"id": 24, "name": "Android Release Engineer", "output": "export_presets.cfg", "check": ["export_presets.cfg", "scripts/verify_android_builds.py"]}
+]
