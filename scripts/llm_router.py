@@ -1,68 +1,51 @@
 #!/usr/bin/env python3
-"""
-Unified Anti-429 Dual-LLM Router (NVIDIA NIM + Google Gemini API) — Studio V7.0
-- Enforces >=3.5s pacing per provider to prevent 40 RPM / 15 RPM bursts.
-- Automatic exponential backoff (15s -> 30s -> 60s) on HTTP 429 / 503.
-- Clean fallback chains across NVIDIA NIM and Gemini models.
-"""
+"""Anti-429 Dual-LLM Router (AI Game Studio V8.0).
 
+Enforces 3.5s pacing and exponential backoff (15s -> 30s -> 60s) on HTTP 429.
+- Private NVIDIA_API_KEY ONLY for blueprints, GDScript 4.7.2 coding, and polish.
+- GEMINI_API_KEY for gemini-decision-1 policy gate and primary multimodal Vision QA
+  (gemini-3.5-flash-lite -> gemini-3.1-flash-lite -> NVIDIA Nemotron Omni backup).
+"""
+from __future__ import annotations
+
+import base64
 import json
 import os
-from pathlib import Path
+import re
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-_LAST_CALL = {"nvidia": 0.0, "gemini": 0.0}
-MIN_GAP_SEC = 3.5
-BACKOFF_SECS = (15, 30, 60)
+NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1/chat/completions"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
-NVIDIA_ROLE_MODELS = {
-    "architect": [
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "moonshotai/kimi-k3.1-pro",
-        "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
-    ],
-    "coder": [
-        "nvidia/nemotron-4-340b-instruct",
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
-    ],
-    "balanced": [
-        "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-nano-3-30b-a3b",
-    ],
-    "fast": [
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-nano-3-30b-a3b",
-        "nvidia/nemotron-3-super-120b-a12b",
-    ],
-    "safety": [
-        "nvidia/nemotron-3.5-content-safety",
-        "nvidia/nemotron-3-super-120b-a12b",
-    ],
-    "omni": [
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "nvidia/nemotron-3-super-120b-a12b",
-    ],
+MIN_DELAY_SEC = 3.5
+BACKOFF_SCHEDULE = (15, 30, 60)
+
+NVIDIA_ROLES: Dict[str, List[str]] = {
+    "architect": ["nvidia/nemotron-3-ultra-550b-a55b", "moonshotai/kimi-k3.1-pro", "nvidia/nemotron-3-super-120b-a12b"],
+    "core_coder": ["nvidia/nemotron-4-340b-instruct", "moonshotai/kimi-k3.1-pro", "nvidia/nemotron-3-super-120b-a12b"],
+    "balanced_coder": ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3.5-lightning-30b-a3b"],
+    "fast_patch": ["nvidia/nemotron-3.5-lightning-30b-a3b", "nvidia/nemotron-3-super-120b-a12b"],
+    "reward": ["nvidia/nemotron-4-340b-reward", "nvidia/nemotron-3-super-120b-a12b"],
+    "safety": ["nvidia/nemotron-3.5-content-safety", "nvidia/nemotron-3-super-120b-a12b"],
+    "vision_backup": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "nvidia/nemotron-3-super-120b-a12b"],
 }
 
-GEMINI_QA_MODELS = (
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash",
-)
+GEMINI_VISION_CHAIN = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+
+_LAST_CALL_TS = 0.0
 
 
-def _pace(provider: str) -> None:
-    now = time.monotonic()
-    elapsed = now - _LAST_CALL.get(provider, 0.0)
-    if elapsed < MIN_GAP_SEC:
-        time.sleep(MIN_GAP_SEC - elapsed)
-    _LAST_CALL[provider] = time.monotonic()
+def _pace() -> None:
+    global _LAST_CALL_TS
+    now = time.time()
+    wait = MIN_DELAY_SEC - (now - _LAST_CALL_TS)
+    if wait > 0:
+        time.sleep(wait)
+    _LAST_CALL_TS = time.time()
 
 
 def _nvidia_key() -> str:
@@ -73,177 +56,139 @@ def _gemini_key() -> str:
     return os.environ.get("GEMINI_API_KEY", "").strip()
 
 
-def nvidia_chat(
-    messages: list,
-    role: str = "balanced",
-    max_tokens: int = 2048,
+def extract_json_block(text: str) -> Dict[str, Any]:
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.S)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("No JSON object found in LLM response")
+    obj = json.loads(cleaned[start : end + 1])
+    if not isinstance(obj, dict):
+        raise ValueError("Parsed JSON is not an object")
+    return obj
+
+
+def _http_post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: int = 120) -> Dict[str, Any]:
+    data = json.dumps(payload).encode("utf-8")
+    last_err: Optional[Exception] = None
+    for attempt in range(len(BACKOFF_SCHEDULE) + 1):
+        _pace()
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_err = exc
+            if exc.code == 429 and attempt < len(BACKOFF_SCHEDULE):
+                delay = BACKOFF_SCHEDULE[attempt]
+                print(f"[ANTI-429] HTTP 429 received; backing off {delay}s...")
+                time.sleep(delay)
+                continue
+            raise
+        except Exception as exc:
+            last_err = exc
+            if attempt < len(BACKOFF_SCHEDULE):
+                time.sleep(5)
+                continue
+            raise
+    raise RuntimeError(f"HTTP POST failed after retries: {last_err}")
+
+
+def call_nvidia(
+    role: str,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int = 4096,
     temperature: float = 0.2,
-    timeout: int = 60,
-) -> tuple[str, str]:
+) -> Dict[str, Any]:
     key = _nvidia_key()
     if not key:
-        return "", "NO_NVIDIA_KEY"
-
-    models = NVIDIA_ROLE_MODELS.get(role, NVIDIA_ROLE_MODELS["balanced"])
-    for model_id in models:
-        payload = json.dumps({
-            "model": model_id,
-            "messages": messages,
+        raise RuntimeError("NVIDIA_API_KEY is not set in environment")
+    models = NVIDIA_ROLES.get(role, NVIDIA_ROLES["balanced_coder"])
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    last_err = ""
+    for model in models:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             "max_tokens": max_tokens,
             "temperature": temperature,
-        }).encode("utf-8")
-
-        for attempt in range(len(BACKOFF_SECS) + 1):
-            _pace("nvidia")
-            req = urllib.request.Request(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
-                data=payload,
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                },
-                method="POST",
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
-                    txt = (body["choices"][0]["message"].get("content") or "").strip()
-                    if txt:
-                        return txt, model_id
-                    break
-            except urllib.error.HTTPError as err:
-                if err.code in (429, 503) and attempt < len(BACKOFF_SECS):
-                    wait = BACKOFF_SECS[attempt]
-                    print(f"[LLM_ROUTER] NVIDIA {model_id} HTTP {err.code}; backing off {wait}s...")
-                    time.sleep(wait)
-                    continue
-                print(f"[LLM_ROUTER] NVIDIA {model_id} HTTP {err.code}; trying next model.")
-                break
-            except Exception as exc:
-                print(f"[LLM_ROUTER] NVIDIA {model_id} error: {exc}; trying next model.")
-                break
-
-    return "", "NVIDIA_FALLBACK_NONE"
-
-
-def gemini_decision_gate(question: str, context: str) -> dict:
-    """Fast clean-room / policy decision check with safe fallback."""
-    key = _gemini_key()
-    if key:
+        }
         try:
-            from google import genai
-            _pace("gemini")
-            client = genai.Client(api_key=key)
-            prompt = (
-                f"Decision question: {question}\nContext: {context[:1200]}\n"
-                "Reply compact JSON ONLY: {\"allow\": true, \"reason\": \"short reason\"}"
-            )
-            for model_id in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
-                try:
-                    res = client.models.generate_content(model=model_id, contents=[prompt])
-                    raw = (res.text or "").strip()
-                    if "{" in raw and "}" in raw:
-                        raw = raw[raw.find("{"): raw.rfind("}") + 1]
-                        parsed = json.loads(raw)
-                        parsed["model"] = model_id
-                        return parsed
-                except Exception:
-                    continue
+            body = _http_post_json(NVIDIA_API_BASE, payload, headers, timeout=150)
+            content = body["choices"][0]["message"]["content"].strip()
+            if content:
+                return {"provider": "nvidia_nim", "model": model, "text": content}
         except Exception as exc:
-            print(f"[LLM_ROUTER] Gemini decision gate note: {exc}")
-
-    txt, model = nvidia_chat(
-        [{"role": "user", "content": f"{question}\nContext: {context[:800]}\nReply JSON {{\"allow\": true, \"reason\": \"...\"}}"}],
-        role="fast",
-        max_tokens=160,
-    )
-    if txt and "{" in txt and "}" in txt:
-        try:
-            parsed = json.loads(txt[txt.find("{"): txt.rfind("}") + 1])
-            parsed["model"] = model
-            return parsed
-        except Exception:
-            pass
-    return {"allow": True, "reason": "Clean-room policy verified locally", "model": "deterministic_guard"}
+            last_err = f"{model}: {exc}"
+            print(f"[LLM_ROUTER WARN] NVIDIA {last_err}; trying fallback...")
+    raise RuntimeError(f"All NVIDIA NIM models failed for role '{role}': {last_err}")
 
 
-def gemini_image_qa(image_path: Path, prompt: str) -> tuple[str, str]:
+def call_gemini_decision_gate(prompt: str) -> Dict[str, Any]:
     key = _gemini_key()
-    if not key or not image_path.exists():
-        return "VERDICT: PASS (local check)", "local"
+    if not key:
+        return {"provider": "local_policy_fallback", "approved": True, "note": "GEMINI_API_KEY missing"}
+    url = f"{GEMINI_API_BASE}/gemini-3.5-flash-lite:generateContent?key={key}"
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": f"Respond ONLY with JSON {{\"approved\": true|false, \"reason\": \"...\"}}.\n{prompt}"}]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 256},
+    }
     try:
-        from google import genai
-        from PIL import Image
-        client = genai.Client(api_key=key)
-        img = Image.open(image_path)
-        for model_id in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"):
-            for attempt in range(2):
-                _pace("gemini")
-                try:
-                    res = client.models.generate_content(model=model_id, contents=[img, prompt])
-                    txt = (res.text or "").strip()
-                    if txt:
-                        return txt, model_id
-                except Exception as exc:
-                    if "429" in str(exc) and attempt == 0:
-                        time.sleep(15)
-                        continue
-                    break
+        body = _http_post_json(url, payload, {"Content-Type": "application/json"}, timeout=45)
+        text = "".join(p.get("text", "") for p in body.get("candidates", [{}])[0].get("content", {}).get("parts", []))
+        parsed = extract_json_block(text)
+        parsed["provider"] = "gemini_decision_gate"
+        return parsed
     except Exception as exc:
-        print(f"[LLM_ROUTER] Image QA note: {exc}")
-    return "VERDICT: PASS (fallback)", "fallback"
+        return {"provider": "gemini_decision_gate", "approved": True, "warning": str(exc)}
 
 
-def gemini_video_qa(video_path: Path, prompt: str) -> tuple[str, str]:
-    """Primary: Gemini Flash-Lite video upload -> Backup: NVIDIA Omni reasoning."""
-    key = _gemini_key()
-    if key and video_path.exists():
-        try:
-            from google import genai
-            client = genai.Client(api_key=key)
-            uploaded = None
+def call_vision_qa(prompt: str, image_paths: List[Path], max_tokens: int = 1600) -> Dict[str, Any]:
+    g_key = _gemini_key()
+    encoded: List[Dict[str, str]] = []
+    for p in image_paths:
+        if p.exists() and p.stat().st_size > 1024:
+            mime = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+            encoded.append({"mime": mime, "b64": base64.b64encode(p.read_bytes()).decode("ascii")})
+    if not encoded:
+        raise RuntimeError("No valid images supplied to call_vision_qa")
+
+    if g_key:
+        for model in GEMINI_VISION_CHAIN:
+            parts: List[Dict[str, Any]] = [{"text": prompt}]
+            for img in encoded:
+                parts.append({"inline_data": {"mime_type": img["mime"], "data": img["b64"]}})
+            url = f"{GEMINI_API_BASE}/{model}:generateContent?key={g_key}"
+            payload = {
+                "contents": [{"role": "user", "parts": parts}],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": max_tokens},
+            }
             try:
-                _pace("gemini")
-                uploaded = client.files.upload(file=str(video_path))
-                for _ in range(20):
-                    state = getattr(uploaded, "state", None)
-                    if state and getattr(state, "name", "") == "PROCESSING":
-                        time.sleep(2)
-                        uploaded = client.files.get(name=uploaded.name)
-                    else:
-                        break
+                body = _http_post_json(url, payload, {"Content-Type": "application/json"}, timeout=120)
+                text = "".join(p.get("text", "") for p in body.get("candidates", [{}])[0].get("content", {}).get("parts", [])).strip()
+                if text:
+                    return {"provider": "gemini", "model": model, "text": text}
             except Exception as exc:
-                print(f"[LLM_ROUTER] Video upload fallback to prompt-only: {exc}")
-                uploaded = None
+                print(f"[VISION_QA WARN] Gemini {model} failed: {exc}")
 
-            for model_id in GEMINI_QA_MODELS:
-                for attempt in range(2):
-                    _pace("gemini")
-                    try:
-                        contents = [uploaded, prompt] if uploaded is not None else [prompt]
-                        res = client.models.generate_content(model=model_id, contents=contents)
-                        txt = (res.text or "").strip()
-                        if txt:
-                            return txt, model_id
-                    except Exception as exc:
-                        if "429" in str(exc) and attempt == 0:
-                            time.sleep(15)
-                            continue
-                        print(f"[LLM_ROUTER] Gemini {model_id} error: {exc}")
-                        break
-        except Exception as exc:
-            print(f"[LLM_ROUTER] Gemini video QA error: {exc}")
+    nv_key = _nvidia_key()
+    if nv_key:
+        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for img in encoded:
+            content.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
+        headers = {"Authorization": f"Bearer {nv_key}", "Content-Type": "application/json"}
+        for model in NVIDIA_ROLES["vision_backup"]:
+            payload = {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, "temperature": 0.1}
+            try:
+                body = _http_post_json(NVIDIA_API_BASE, payload, headers, timeout=150)
+                text = body["choices"][0]["message"]["content"].strip()
+                if text:
+                    return {"provider": "nvidia_omni", "model": model, "text": text}
+            except Exception as exc:
+                print(f"[VISION_QA WARN] NVIDIA {model} failed: {exc}")
 
-    txt, model = nvidia_chat(
-        [{"role": "user", "content": prompt}],
-        role="omni",
-        max_tokens=220,
-        temperature=0.1,
-    )
-    if txt:
-        return txt, model
-    return "VERDICT: PASS (deterministic telemetry verified)", "deterministic"
-
-
-if __name__ == "__main__":
-    print("[LLM_ROUTER] Ready | NVIDIA key:", bool(_nvidia_key()), "| Gemini key:", bool(_gemini_key()))
+    raise RuntimeError("All Vision QA providers (Gemini Flash-Lite & NVIDIA Omni) failed")
