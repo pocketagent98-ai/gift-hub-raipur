@@ -1,5 +1,8 @@
 {
   "schema_version": "7.0",
+  "harness": "deepseek-harness",
+  "mode": "primary_and_only_coding_agent",
+  "opencode_enabled": false,
   "agent_harness": "deepseek-harness-nvidia-private",
   "provider": "nvidia_nim",
   "api_base": "https://integrate.api.nvidia.com/v1",
