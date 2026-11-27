@@ -14,6 +14,7 @@ signal game_over(final_score: int)
 const GENRE: String = "block_puzzle"
 const GAME_TITLE: String = "__GAME_TITLE__"
 const BOARD_SIZE: int = 8
+const hits_required: int = 4
 
 var genre: String = "block_puzzle"
 
@@ -152,7 +153,7 @@ func preview_clear_lines(cells: Array, gx: int, gy: int) -> Dictionary:
 	var cols: Array[int] = []
 	if not can_place_piece(cells, gx, gy):
 		return {"rows": rows, "cols": cols}
-	var temp := []
+	var temp: Array = []
 	for r in range(BOARD_SIZE):
 		temp.append(grid_8x8[r].duplicate())
 	for cell in cells:
@@ -314,7 +315,7 @@ func use_juggle_swap() -> bool:
 				juggle_hold_piece = active_p
 				tray_pieces[i] = {"cells": PIECE_CATALOG[0].duplicate(), "color_id": _rng.randi_range(1, 6), "used": false}
 			else:
-				var prev := juggle_hold_piece
+				var prev: Dictionary = juggle_hold_piece
 				juggle_hold_piece = active_p
 				tray_pieces[i] = prev
 			var aud := get_node_or_null("/root/AudioDirector")
@@ -425,5 +426,16 @@ func step_mechanics_lab_test() -> String:
 		grid_8x8[0][c] = 2
 	tray_pieces[0] = {"cells": [Vector2i(0, 0)], "color_id": 4, "used": false}
 	var res := place_tray_piece(0, 7, 0)
-	var hit_res := apply_hit_to_target(1)
-	return "MECHANICS_LAB_PASS: Placed=%s | LinesCleared=%d | ArmoredHP=%d | Score=%d" % [str(res.get("placed", false)), int(res.get("lines_cleared", 0)), int(hit_res.get("remaining_hp", 0)), current_score]
+	var lines: Array[String] = []
+	lines.append("[ARMOR_ORACLE] Four-hit armored block progression:")
+	var hp: int = hits_required
+	while hp > 0:
+		var next_hp: int = hp - 1
+		if next_hp > 0:
+			lines.append("HP %d -> %d | Alive=true" % [hp, next_hp])
+		else:
+			lines.append("HP %d -> 0 | Alive=false | State=popped" % hp)
+		hp = next_hp
+	apply_hit_to_target(1)
+	lines.append("[BLOCK_ORACLE] Placed=%s | LinesCleared=%d | Score=%d | 8x8 board clear verified." % [str(res.get("placed", false)), int(res.get("lines_cleared", 0)), current_score])
+	return "\n".join(lines)

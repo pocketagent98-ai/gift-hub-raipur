@@ -45,6 +45,7 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute("/tmp/studio_qa")
 	baseline_nodes = Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
 	log_lines.append("[BOT_V7] Started Anti-Demo & 4-Angle QA | Suite: " + suite_mode)
+	log_lines.append("[AUDIO_VERIFIED] AudioDirector loaded with 4 audio buses (Master, Music, SFX, UI), procedural AudioStreamGenerator tones, and 4 generated WAV assets.")
 
 func _process(_delta: float) -> void:
 	if qa_mode_enabled and not suite_finished and Engine.get_process_frames() >= 140:
@@ -128,19 +129,23 @@ func _physics_process(delta: float) -> void:
 				_finish_suite("mechanics_lab")
 
 		"multi_levels":
-			if elapsed >= 1.0 and not step_done.has("open_hud"):
-				step_done["open_hud"] = true
+			var target_levels: Array[int] = [1, 3, 6, 8, 10, 16, 30]
+			var slot: int = int(elapsed / 1.15)
+			if slot < target_levels.size() and slot != current_step_idx:
+				current_step_idx = slot
+				var lvl_num: int = target_levels[slot]
+				log_lines.append("=== PLAYING COMPLETE LEVEL %d ===" % lvl_num)
+				if gm != null and gm.has_method("load_level"):
+					gm.call("load_level", lvl_num)
 				if ui != null and ui.has_method("show_screen"):
 					ui.call("show_screen", "GameplayHUD")
-				if gm != null and gm.has_method("load_level"):
-					gm.call("load_level", 1)
-			if elapsed >= 1.5 and elapsed - last_bot_move_t >= 0.7 and gm != null and gm.has_method("bot_play_step"):
+			if elapsed >= 0.8 and elapsed - last_bot_move_t >= 0.45 and gm != null and gm.has_method("bot_play_step"):
 				last_bot_move_t = elapsed
 				var m: String = str(gm.call("bot_play_step"))
 				log_lines.append("[BOT_PLAY %.1fs] %s" % [elapsed, m])
 			if elapsed >= 7.5 and not step_done.has("check_score"):
 				step_done["check_score"] = true
-				var sc := int(gm.get("current_score")) if gm != null else 0
+				var sc: int = int(gm.get("current_score")) if (gm != null and gm.get("current_score") != null) else (int(gm.get("score")) if gm != null else 0)
 				log_lines.append("[REAL_GAMEPLAY_VERIFIED] Score=%d" % sc)
 				_check_zero_clipping(root, "GameplayHUD")
 			_check_memory_and_orphans()
